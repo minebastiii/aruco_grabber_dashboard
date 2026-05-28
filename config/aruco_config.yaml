@@ -1,0 +1,12 @@
+# aruco_config.yaml
+# Supported dicts: 4x4_50, 4x4_100 ... 7x7_1000, original
+
+targets:
+  cube_a:
+    ids: [3]
+    dict: 4x4_50
+
+trailers:
+  trailer_main:
+    ids: [0]
+    dict: 5x5_100

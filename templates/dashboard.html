@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>ArUco Cube System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #080b10; --surface: #0d1117; --surface2: #111620;
+    --border: #1c2230; --border-hi: #2a3450;
+    --text: #c9d1e0; --muted: #4a5568;
+    --accent: #3b82f6; --green: #22c55e; --orange: #f97316;
+    --red: #ef4444; --yellow: #eab308; --purple: #a855f7; --cyan: #06b6d4;
+  }
+  html, body { background: var(--bg); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 13px; height: 100vh; overflow: hidden; }
+
+  .layout { display: grid; grid-template-rows: 48px 1fr; grid-template-columns: 1fr 280px; height: 100vh; }
+
+  /* ── Header ── */
+  header { grid-column: 1/-1; display: flex; align-items: center; gap: 14px; padding: 0 18px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: #fff; }
+  .logo span { color: var(--accent); }
+  .hsep { width: 1px; height: 18px; background: var(--border-hi); }
+  .conn-pill { display: flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 20px; border: 1px solid var(--border-hi); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .conn-pill.on  { color: var(--green);  border-color: #166534; background: #052012; }
+  .conn-pill.off { color: var(--red);    border-color: #7f1d1d; background: #1c0505; }
+  .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  .conn-pill.on .dot { animation: blink 1.4s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+  .fps-badge { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .fps-badge b { color: var(--accent); }
+
+  /* ── 2×2 video grid ── */
+  .video-grid { display: grid; grid-template-rows: 1fr 1fr; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); overflow: hidden; }
+  .vpanel { background: #000; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .vpanel img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .vlabel { position: absolute; top: 8px; left: 10px; z-index: 2; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; backdrop-filter: blur(4px); pointer-events: none; }
+  .l-hsv    { background: rgba(168,85,247,.15);  color: var(--purple); border: 1px solid rgba(168,85,247,.3); }
+  .l-mask   { background: rgba(6,182,212,.15);   color: var(--cyan);   border: 1px solid rgba(6,182,212,.3); }
+  .l-roi    { background: rgba(34,197,94,.12);   color: var(--green);  border: 1px solid rgba(34,197,94,.3); }
+  .l-zoomed { background: rgba(249,115,22,.15);  color: var(--orange); border: 1px solid rgba(249,115,22,.3); }
+
+  /* ── Sidebar ── */
+  aside { border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Tab bar */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .tab { flex: 1; padding: 9px 0; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; text-align: center; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; transition: all .2s; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); background: rgba(59,130,246,.06); }
+
+  .tab-content { flex: 1; overflow-y: auto; }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* Status pane */
+  .sec { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .sec-title { font-family: 'Syne', sans-serif; font-size: 9px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .state-badge { display: block; padding: 5px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; text-align: center; text-transform: uppercase; }
+  .s-SEARCH,.s-SEARCH_TURNING,.s-SEARCH_WAIT       { background:#1a1a2e; color:#7b8cde; border:1px solid #2d2d6e; }
+  .s-ALIGN,.s-ALIGN_TURNING,.s-ALIGN_WAIT          { background:#1a2620; color:#5bc98a; border:1px solid #1a5c3a; }
+  .s-APPROACH,.s-APPROACH_FORWARD,.s-APPROACH_BACK { background:#1a2e1a; color:var(--green); border:1px solid #1a5c1a; }
+  .s-GRASP  { background:#2e1a0a; color:var(--orange); border:1px solid #7a3a0a; }
+  .s-VERIFY { background:#2e2a0a; color:var(--yellow); border:1px solid #7a6a0a; }
+  .s-DEPLOY { background:#2e1a0a; color:var(--orange); border:1px solid #7a3a0a; }
+  .s-DONE   { background:#0a2e1a; color:#4ade80;       border:1px solid #0a7a3a; }
+  .s-UNKNOWN,.s-null { background:#1a1a1a; color:var(--muted); border:1px solid #2a2a2a; }
+  .det { border-radius: 5px; border: 1px solid var(--border-hi); padding: 8px 10px; margin-bottom: 6px; }
+  .det.hit  { border-color: #166534; background: #03110a; }
+  .det-hdr  { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+  .ind { width: 7px; height: 7px; border-radius: 50%; }
+  .hit  .ind { background: var(--green); box-shadow: 0 0 5px var(--green); }
+  .miss .ind { background: var(--muted); }
+  .det-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; }
+  .det-nm  { margin-left: auto; font-size: 9px; color: var(--accent); max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .det-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 6px; }
+  .dk { font-size: 8px; color: var(--muted); text-transform: uppercase; }
+  .dv { font-size: 11px; font-weight: 600; }
+  .stat { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border); }
+  .stat:last-child { border-bottom: none; }
+  .sk { font-size: 9px; color: var(--muted); }
+  .sv { font-size: 11px; font-weight: 600; }
+  .ok   { color: var(--green); }
+  .warn { color: var(--yellow); }
+  .err  { color: var(--red); }
+
+  /* ── Tune pane ── */
+  .tune-pane { padding: 10px 12px; }
+  .tune-group { margin-bottom: 14px; }
+  .tune-group-title { font-family: 'Syne', sans-serif; font-size: 9px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+  .param-row { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
+  .param-row label { font-size: 9px; color: #888; width: 110px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .param-row input[type=range] { flex: 1; accent-color: var(--accent); height: 3px; cursor: pointer; }
+  .param-val { font-size: 10px; font-weight: 600; color: var(--text); width: 36px; text-align: right; flex-shrink: 0; }
+  .tune-actions { display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .btn { flex: 1; padding: 6px 0; border: none; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; font-family: inherit; }
+  .btn-apply  { background: var(--accent); color: #fff; }
+  .btn-reset  { background: var(--surface2); color: var(--muted); border: 1px solid var(--border-hi); }
+  .btn-apply:hover { background: #2563eb; }
+  .btn-reset:hover { color: var(--text); }
+  .tune-status { font-size: 9px; color: var(--muted); margin-top: 6px; text-align: center; min-height: 14px; }
+  .tune-status.ok  { color: var(--green); }
+  .tune-status.err { color: var(--red); }
+
+  /* Config editor */
+  .cfg-row { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+  .cfg-name { background: var(--surface2); border: 1px solid var(--border-hi); border-radius: 3px; color: var(--accent); font-family: inherit; font-size: 9px; padding: 3px 5px; width: 72px; }
+  .cfg-ids  { background: var(--surface2); border: 1px solid var(--border-hi); border-radius: 3px; color: var(--text); font-family: inherit; font-size: 9px; padding: 3px 5px; flex: 1; }
+  .cfg-name:focus, .cfg-ids:focus { outline: none; border-color: var(--accent); }
+  .cfg-del   { background: none; border: 1px solid #7f1d1d; color: var(--red); border-radius: 3px; font-size: 9px; cursor: pointer; padding: 2px 5px; flex-shrink: 0; }
+  .cfg-del:hover { background: #1c0505; }
+  .cfg-block { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; margin-bottom: 6px; }
+  .cfg-label { font-size: 8px; color: var(--muted); text-transform: uppercase; width: 24px; flex-shrink: 0; }
+  .btn-add  { background: none; border: 1px dashed var(--border-hi); color: var(--muted); border-radius: 3px; font-size: 9px; cursor: pointer; padding: 4px 8px; margin-top: 2px; font-family: inherit; width: 100%; }
+  .btn-add:hover { border-color: var(--accent); color: var(--accent); }
+
+  .area-display { margin-top: 8px; }
+  .area-nums { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+  .area-big { font-size: 18px; font-weight: 700; color: var(--text); }
+  .area-filt { font-size: 10px; color: var(--purple); }
+  .area-bar-wrap { background: var(--border); border-radius: 3px; height: 5px; overflow: hidden; }
+  .area-bar-fill { height: 100%; border-radius: 3px; transition: width 0.15s, background 0.3s; background: var(--accent); }
+  .tab-content::-webkit-scrollbar { width: 3px; }
+  .tab-content::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <header>
+    <div class="logo">ArUco<span>.</span>System</div>
+    <div class="hsep"></div>
+    <div class="conn-pill off" id="conn-pill"><div class="dot"></div><span id="conn-text">Disconnected</span></div>
+    <div class="fps-badge">fps: <b id="fps-val">—</b></div>
+  </header>
+
+  <div class="video-grid">
+    <div class="vpanel"><span class="vlabel l-hsv">HSV</span><img id="img-hsv" src="/stream/hsv" alt="hsv"></div>
+    <div class="vpanel"><span class="vlabel l-mask">Mask</span><img id="img-mask" src="/stream/mask" alt="mask"></div>
+    <div class="vpanel"><span class="vlabel l-roi">Camera + ROI</span><img id="img-raw" src="/stream/raw" alt="roi"></div>
+    <div class="vpanel"><span class="vlabel l-zoomed">Zoomed ROI</span><img id="img-zoomed" src="/stream/zoomed" alt="zoomed"></div>
+  </div>
+
+  <aside>
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('status')">Status</div>
+      <div class="tab" onclick="switchTab('tune')">Tune</div>
+    </div>
+
+    <div class="tab-content">
+
+      <!-- STATUS TAB -->
+      <div class="tab-pane active" id="tab-status">
+        <div class="sec">
+          <div class="sec-title">Robot State</div>
+          <div class="state-badge s-UNKNOWN" id="state-badge">UNKNOWN</div>
+        </div>
+        <div class="sec">
+          <div class="sec-title">Target</div>
+          <div class="det miss" id="target-card">
+            <div class="det-hdr"><div class="ind"></div><span class="det-lbl">Target</span><span class="det-nm" id="t-name">—</span></div>
+            <div class="det-grid">
+              <div><div class="dk">cx</div><div class="dv" id="t-cx">—</div></div>
+              <div><div class="dk">cy</div><div class="dv" id="t-cy">—</div></div>
+              <div><div class="dk">area</div><div class="dv" id="t-area">—</div></div>
+              <div><div class="dk">id</div><div class="dv" id="t-id">—</div></div>
+            </div>
+            <div class="area-display">
+              <div class="area-nums">
+                <span class="area-big" id="t-area-big">—</span>
+                <span class="area-filt">filt: <b id="t-area-filt">—</b></span>
+              </div>
+              <div class="area-bar-wrap"><div class="area-bar-fill" id="t-area-bar" style="width:0%"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="sec">
+          <div class="sec-title">Trailer</div>
+          <div class="det miss" id="trailer-card">
+            <div class="det-hdr"><div class="ind"></div><span class="det-lbl">Trailer</span><span class="det-nm" id="tr-name">—</span></div>
+            <div class="det-grid">
+              <div><div class="dk">cx</div><div class="dv" id="tr-cx">—</div></div>
+              <div><div class="dk">cy</div><div class="dv" id="tr-cy">—</div></div>
+              <div><div class="dk">area</div><div class="dv" id="tr-area">—</div></div>
+              <div><div class="dk">id</div><div class="dv" id="tr-id">—</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="sec">
+          <div class="sec-title">System</div>
+          <div class="stat"><span class="sk">ROI source</span><span class="sv" id="roi-src">—</span></div>
+          <div class="stat"><span class="sk">Det fps</span><span class="sv" id="det-fps">—</span></div>
+          <div class="stat"><span class="sk">Update</span><span class="sv" id="last-upd">—</span></div>
+        </div>
+
+      </div>
+
+      <!-- TUNE TAB -->
+      <div class="tab-pane" id="tab-tune">
+        <div class="tune-pane" id="tune-pane">
+          <div style="font-size:10px;color:var(--muted);padding:20px 0;text-align:center">
+            Waiting for detector params…
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </aside>
+</div>
+
+<script>
+// ── Stream reconnect ──────────────────────────────────────────────
+function watchStream(id, url) {
+  const img = document.getElementById(id);
+  function reconnect() { img.src=''; setTimeout(()=>img.src=url+'?t='+Date.now(),50); }
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') reconnect(); });
+  img.addEventListener('error', ()=>setTimeout(reconnect, 1000));
+}
+watchStream('img-hsv',    '/stream/hsv');
+watchStream('img-mask',   '/stream/mask');
+watchStream('img-raw',    '/stream/raw');
+watchStream('img-zoomed', '/stream/zoomed');
+
+// ── Tab switching ─────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active', ['status','tune'][i]===name));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active', p.id==='tab-'+name));
+  // Only load config the first time the tune tab is opened — preserve edits after that
+  if (name==='tune' && !tuneLoaded) loadConfig();
+}
+
+// ── Param definitions ─────────────────────────────────────────────
+const PARAM_DEFS = [
+  { group: "ROI / Zoom", params: [
+    { key: "roi_scale",     label: "ROI zoom scale",   min:1,   max:8,   step:0.5,  type:"float" },
+    { key: "min_cube_area", label: "Min cube area px²", min:50,  max:5000,step:50,   type:"float" },
+  ]},
+  { group: "Green Floor Exclusion", params: [
+    { key: "floor_h_low",  label: "H low",  min:0, max:179, step:1, type:"int" },
+    { key: "floor_h_high", label: "H high", min:0, max:179, step:1, type:"int" },
+    { key: "floor_s_low",  label: "S low",  min:0, max:255, step:1, type:"int" },
+    { key: "floor_s_high", label: "S high", min:0, max:255, step:1, type:"int" },
+    { key: "floor_v_low",  label: "V low",  min:0, max:255, step:1, type:"int" },
+    { key: "floor_v_high", label: "V high", min:0, max:255, step:1, type:"int" },
+  ]},
+  { group: "White Wall Exclusion", params: [
+    { key: "white_v_thresh", label: "V threshold", min:100, max:255, step:1,    type:"int" },
+    { key: "white_s_thresh", label: "S threshold", min:0,   max:100, step:1,    type:"int" },
+  ]},
+  { group: "Dark Cube Detection", params: [
+    { key: "dark_v_thresh", label: "V dark threshold", min:20, max:200, step:5,    type:"int" },
+    { key: "dark_fill_min", label: "Min dark fill",     min:0,  max:0.5, step:0.01, type:"float" },
+  ]},
+  { group: "EMA Filter", params: [
+    { key: "filter_alpha", label: "Alpha (0=frozen, 1=raw)", min:0.01, max:1.0, step:0.01, type:"float" },
+  ]},
+];
+
+let currentParams = {};
+let sliderValues  = {};
+// Mutable copies of targets/trailers for the config editor
+let editTargets  = {};
+let editTrailers = {};
+
+function buildTuneUI(params) {
+  currentParams = params;
+  sliderValues  = {...params};
+  editTargets   = JSON.parse(JSON.stringify(params.targets  || {}));
+  editTrailers  = JSON.parse(JSON.stringify(params.trailers || {}));
+
+  const pane = document.getElementById('tune-pane');
+  let html = '';
+
+  // ── Numeric sliders ──────────────────────────────────────────────
+  for (const group of PARAM_DEFS) {
+    html += `<div class="tune-group"><div class="tune-group-title">${group.group}</div>`;
+    for (const def of group.params) {
+      const val = params[def.key] ?? def.min;
+      const disp = def.type==='float' ? parseFloat(val).toFixed(def.step < 0.1 ? 2 : 1) : parseInt(val);
+      html += `
+        <div class="param-row">
+          <label title="${def.key}">${def.label}</label>
+          <input type="range" id="sl_${def.key}"
+            min="${def.min}" max="${def.max}" step="${def.step}" value="${val}"
+            oninput="onSlider('${def.key}','${def.type}',this.value)">
+          <span class="param-val" id="pv_${def.key}">${disp}</span>
+        </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // ── ArUco Config editor ──────────────────────────────────────────
+  html += `<div class="tune-group">
+    <div class="tune-group-title">ArUco Config — Targets</div>
+    <div id="cfg-targets">${renderConfigEntries(editTargets, 'target')}</div>
+    <button class="btn btn-add" onclick="addConfigEntry('target')">+ Add Target</button>
+  </div>`;
+
+  html += `<div class="tune-group">
+    <div class="tune-group-title">ArUco Config — Trailers</div>
+    <div id="cfg-trailers">${renderConfigEntries(editTrailers, 'trailer')}</div>
+    <button class="btn btn-add" onclick="addConfigEntry('trailer')">+ Add Trailer</button>
+  </div>`;
+
+  html += `
+    <div class="tune-actions">
+      <button class="btn btn-reset" onclick="resetParams()">Reset</button>
+      <button class="btn btn-apply" onclick="applyParams()">Apply All</button>
+    </div>
+    <div class="tune-status" id="tune-status"></div>`;
+
+  pane.innerHTML = html;
+}
+
+const DICT_OPTIONS = [
+  "4x4_50","4x4_100","4x4_250","4x4_1000",
+  "5x5_50","5x5_100","5x5_250","5x5_1000",
+  "6x6_50","6x6_100","6x6_250","6x6_1000",
+  "7x7_50","7x7_100","7x7_250","7x7_1000",
+  "original"
+];
+
+function renderConfigEntries(dict, kind) {
+  let html = '';
+  for (const [name, entry] of Object.entries(dict)) {
+    const ids     = Array.isArray(entry) ? entry        : (entry.ids  || []);
+    const dictVal = Array.isArray(entry) ? '4x4_50'     : (entry.dict || '4x4_50');
+    const dictOpts = DICT_OPTIONS.map(d =>
+      `<option value="${d}" ${d===dictVal?'selected':''}>${d}</option>`).join('');
+    html += `
+      <div class="cfg-block">
+        <div class="cfg-row">
+          <input class="cfg-name" value="${name}"
+            onchange="renameConfigEntry('${kind}','${name}',this.value)" title="Name">
+          <button class="cfg-del" onclick="removeConfigEntry('${kind}','${name}')">✕</button>
+        </div>
+        <div class="cfg-row">
+          <span class="cfg-label">IDs</span>
+          <input class="cfg-ids" value="${ids.join(', ')}"
+            onchange="updateConfigField('${kind}','${name}','ids',this.value)" title="IDs (comma-separated)">
+        </div>
+        <div class="cfg-row">
+          <span class="cfg-label">Dict</span>
+          <select class="cfg-dict" onchange="updateConfigField('${kind}','${name}','dict',this.value)"
+            style="flex:1;background:var(--surface2);border:1px solid var(--border-hi);
+                   border-radius:3px;color:var(--accent);font-family:inherit;font-size:9px;
+                   padding:2px 4px;cursor:pointer;">
+            ${dictOpts}
+          </select>
+        </div>
+      </div>`;
+  }
+  return html || '<div style="font-size:9px;color:var(--muted);padding:4px 0">No entries</div>';
+}
+
+function refreshConfigSection(kind) {
+  const dict = kind==='target' ? editTargets : editTrailers;
+  document.getElementById('cfg-'+kind+'s').innerHTML = renderConfigEntries(dict, kind);
+}
+
+function addConfigEntry(kind) {
+  const dict = kind==='target' ? editTargets : editTrailers;
+  let n = 1;
+  while (dict['new_'+n] !== undefined) n++;
+  dict['new_'+n] = { ids: [], dict: '4x4_50' };
+  refreshConfigSection(kind);
+}
+
+function removeConfigEntry(kind, name) {
+  const dict = kind==='target' ? editTargets : editTrailers;
+  delete dict[name];
+  refreshConfigSection(kind);
+}
+
+function renameConfigEntry(kind, oldName, newName) {
+  const dict = kind==='target' ? editTargets : editTrailers;
+  newName = newName.trim();
+  if (!newName || newName === oldName) return;
+  dict[newName] = dict[oldName];
+  delete dict[oldName];
+  refreshConfigSection(kind);
+}
+
+function updateConfigField(kind, name, field, raw) {
+  const dict = kind==='target' ? editTargets : editTrailers;
+  if (!dict[name] || Array.isArray(dict[name])) {
+    // upgrade plain list to object
+    const ids = Array.isArray(dict[name]) ? dict[name] : [];
+    dict[name] = { ids, type: '' };
+  }
+  if (field === 'ids') {
+    dict[name].ids = raw.split(',').map(s=>parseInt(s.trim())).filter(n=>!isNaN(n));
+  } else {
+    dict[name][field] = raw.trim();
+  }
+}
+
+function onSlider(key, type, raw) {
+  const val = type==='float' ? parseFloat(raw) : parseInt(raw);
+  sliderValues[key] = val;
+  const disp = type==='float' ? val.toFixed(raw < 0.1 ? 2 : 1) : val;
+  document.getElementById('pv_'+key).textContent = disp;
+}
+
+async function applyParams() {
+  const status = document.getElementById('tune-status');
+  // Collect current ID field values before sending
+  // (user might have typed without triggering onchange)
+  for (const [kind, dict] of [['target', editTargets], ['trailer', editTrailers]]) {
+    for (const name of Object.keys(dict)) {
+      const el = document.querySelector(`#cfg-${kind}s .cfg-row input.cfg-ids`);
+      // Values are already tracked via onchange, skip re-read to avoid complexity
+    }
+  }
+  const payload = {...sliderValues, targets: editTargets, trailers: editTrailers};
+  try {
+    const resp = await fetch('/api/params', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const d = await resp.json();
+    status.textContent = d.ok ? '✓ Applied' : '✗ Error';
+    status.className = 'tune-status ' + (d.ok ? 'ok' : 'err');
+    setTimeout(()=>{ status.textContent=''; status.className='tune-status'; }, 2000);
+  } catch(e) {
+    status.textContent = '✗ Request failed';
+    status.className = 'tune-status err';
+  }
+}
+
+async function resetParams() {
+  tuneLoaded = false;
+  await loadConfig();
+}
+
+// ── Status polling ────────────────────────────────────────────────
+const ALL_STATES = ['SEARCH','SEARCH_TURNING','SEARCH_WAIT','ALIGN','ALIGN_TURNING','ALIGN_WAIT',
+  'APPROACH','APPROACH_FORWARD','APPROACH_BACK','GRASP','VERIFY','DEPLOY','DONE','UNKNOWN'];
+
+function f(v,d=0){ return v==null?'—':typeof v==='number'?v.toFixed(d):String(v); }
+
+async function poll() {
+  try {
+    const s = await fetch('/api/state').then(r=>r.json());
+    const pill = document.getElementById('conn-pill');
+    pill.className = 'conn-pill '+(s.connected?'on':'off');
+    document.getElementById('conn-text').textContent = s.connected?'Connected':'Disconnected';
+    document.getElementById('fps-val').textContent  = f(s.fps,1);
+    document.getElementById('det-fps').textContent  = f(s.fps,1);
+
+    const badge = document.getElementById('state-badge');
+    const sc = ALL_STATES.includes(s.robot_state)?s.robot_state:'UNKNOWN';
+    badge.className='state-badge s-'+sc; badge.textContent=sc;
+
+    const tc = document.getElementById('target-card');
+    tc.className='det '+(s.target_found?'hit':'miss');
+    document.getElementById('t-name').textContent =s.target_name||'—';
+    document.getElementById('t-cx').textContent   =f(s.target_cx,0);
+    document.getElementById('t-cy').textContent   =f(s.target_cy,0);
+    document.getElementById('t-area').textContent =f(s.target_area,0);
+    document.getElementById('t-id').textContent   =s.target_id>=0?s.target_id:'—';
+    const areaMax = 80000;
+    const areaPct = Math.min(100, (s.target_area_f||0) / areaMax * 100);
+    document.getElementById('t-area-big').textContent  = f(s.target_area, 0);
+    document.getElementById('t-area-filt').textContent = f(s.target_area_f, 0);
+    const bar = document.getElementById('t-area-bar');
+    bar.style.width = areaPct + '%';
+    bar.style.background = areaPct > 75 ? 'var(--green)' : areaPct > 40 ? 'var(--yellow)' : 'var(--accent)';
+
+    const trc=document.getElementById('trailer-card');
+    trc.className='det '+(s.trailer_found?'hit':'miss');
+    document.getElementById('tr-name').textContent=s.trailer_name||'—';
+    document.getElementById('tr-cx').textContent  =f(s.trailer_cx,0);
+    document.getElementById('tr-cy').textContent  =f(s.trailer_cy,0);
+    document.getElementById('tr-area').textContent=f(s.trailer_area,0);
+    document.getElementById('tr-id').textContent  =s.trailer_id>=0?s.trailer_id:'—';
+
+    const roiEl=document.getElementById('roi-src');
+    roiEl.textContent=s.roi_source||'none';
+    roiEl.className='sv '+(s.roi_source==='marker'?'ok':s.roi_source==='mask'?'warn':'err');
+
+    const age=Math.round(Date.now()/1000-s.last_update);
+    const ageEl=document.getElementById('last-upd');
+    ageEl.textContent=age+'s ago';
+    ageEl.className='sv '+(age<2?'ok':age<5?'warn':'err');
+
+  } catch(e) {
+    document.getElementById('conn-pill').className='conn-pill off';
+  }
+}
+
+setInterval(poll, 300);
+poll();
+
+// Config is loaded once when tune tab is first opened.
+// After that, edits are kept in editTargets/editTrailers until page reload.
+let tuneLoaded = false;
+
+async function loadConfig() {
+  try {
+    const resp = await fetch('/api/config');
+    const cfg  = await resp.json();
+    // Merge numeric params from live detector if available
+    let p = {};
+    try {
+      const pr = await fetch('/api/params');
+      const live = await pr.json();
+      if (Object.keys(live).length) p = live;
+    } catch(e) {}
+    // Always use YAML for targets/trailers
+    p.targets  = cfg.targets  || {};
+    p.trailers = cfg.trailers || {};
+    buildTuneUI(p);
+    tuneLoaded = true;
+  } catch(e) {
+    document.getElementById('tune-pane').innerHTML =
+      '<div style="padding:16px;color:var(--red);font-size:10px">Config load failed: ' + e + '</div>';
+  }
+}
+</script>
+</body>
+</html>
