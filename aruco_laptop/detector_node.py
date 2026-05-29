@@ -2,27 +2,23 @@
 """
 detector_node.py — runs on the LAPTOP
 
-ArUco dict type is specified per config entry, e.g.:
-  targets:
-    cube_a:
-      ids: [0, 1, 2]
-      type: pick_up
-      dict: 4x4_50
-  trailers:
-    trailer_main:
-      ids: [10, 11]
-      type: drop_off
-      dict: 5x5_100
-
-Multiple dict types are supported simultaneously.
-Each unique dict is run once per frame; results are matched per-entry.
+Changes vs previous version:
+  FIX 1  make_entry: added type_ parameter (was crashing silently on config load)
+  FIX 2  _load_config / _cb_params: pass type_ correctly
+  FIX 3  EMA filter_alpha default 0.50
+  FIX 4  Tuned DetectorParameters (_make_params)
+  FIX 5  EMA hard-reset on re-detection after gap
+  FIX 6  data_filtered always published (id=-1 when not found)
+  NEW 7  Pose estimation: publishes aruco/target/distance and aruco/trailer/distance
+         (Float32, metres).  Camera intrinsics configured via ROS parameters.
+         Falls back gracefully when no corners are available.
 """
 
 import json
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
-from std_msgs.msg import Bool, String, Float32MultiArray
+from std_msgs.msg import Bool, String, Float32MultiArray, Float32
 import numpy as np
 import cv2
 import yaml
@@ -43,18 +39,42 @@ DICT_MAP = {
 }
 DICT_NAMES = sorted(DICT_MAP.keys())
 
+
+def _make_params():
+    """FIX 4: tuned DetectorParameters for stable detection at distance."""
+    if hasattr(cv2.aruco, "DetectorParameters"):
+        p = cv2.aruco.DetectorParameters()
+    else:
+        p = cv2.aruco.DetectorParameters_create()
+    p.adaptiveThreshWinSizeMin    = 3
+    p.adaptiveThreshWinSizeMax    = 53
+    p.adaptiveThreshWinSizeStep   = 10
+    p.adaptiveThreshConstant      = 7
+    p.minMarkerPerimeterRate      = 0.02
+    p.maxMarkerPerimeterRate      = 4.0
+    p.polygonalApproxAccuracyRate = 0.05
+    p.minCornerDistanceRate       = 0.02
+    p.minMarkerDistanceRate       = 0.02
+    p.errorCorrectionRate         = 1.0
+    p.cornerRefinementMethod      = (cv2.aruco.CORNER_REFINE_SUBPIX
+                                     if hasattr(cv2.aruco, "CORNER_REFINE_SUBPIX") else 1)
+    p.cornerRefinementWinSize        = 5
+    p.cornerRefinementMaxIterations  = 30
+    p.cornerRefinementMinAccuracy    = 0.1
+    return p
+
+
 def build_detector(dict_name: str):
-    """Build ArUco detector. Compatible with OpenCV 4.x, 4.5+ and 4.7+."""
     dict_id = DICT_MAP.get(dict_name, cv2.aruco.DICT_4X4_50)
+    p = _make_params()
     if hasattr(cv2.aruco, "getPredefinedDictionary"):
         d = cv2.aruco.getPredefinedDictionary(dict_id)
-        p = cv2.aruco.DetectorParameters()
         if hasattr(cv2.aruco, "ArucoDetector"):
             return ("new", cv2.aruco.ArucoDetector(d, p))
         return ("mid", (d, p))
     d = cv2.aruco.Dictionary_get(dict_id)
-    p = cv2.aruco.DetectorParameters_create()
     return ("old", (d, p))
+
 
 def run_detector(det_tuple, gray):
     mode, det = det_tuple
@@ -65,16 +85,18 @@ def run_detector(det_tuple, gray):
         corners, ids, _ = cv2.aruco.detectMarkers(gray, d, parameters=p)
     return corners, ids
 
+
 # ── Config entry helpers ─────────────────────────────────────────────
 def entry_ids(e):
     return e.get("ids", []) if isinstance(e, dict) else list(e)
 
-
 def entry_dict_name(e):
     return e.get("dict", "4x4_50") if isinstance(e, dict) else "4x4_50"
 
-def make_entry(ids, dict_name="4x4_50"):
+# FIX 1: added type_ so callers with 3 args work correctly
+def make_entry(ids, type_="", dict_name="4x4_50"):
     return {"ids": [int(i) for i in ids], "dict": str(dict_name)}
+
 
 # ── Default tunable params ───────────────────────────────────────────
 DEFAULT_PARAMS = {
@@ -85,7 +107,7 @@ DEFAULT_PARAMS = {
     "floor_v_low":    40,  "floor_v_high": 255,
     "white_v_thresh": 180, "white_s_thresh": 50,
     "dark_v_thresh":  100, "dark_fill_min":  0.08,
-    "filter_alpha":   0.25,
+    "filter_alpha":   0.50,   # FIX 3
 }
 
 
@@ -97,9 +119,27 @@ class DetectorNode(Node):
         for k, v in DEFAULT_PARAMS.items():
             self.declare_parameter(k, v)
 
-        self.p = {k: self.get_parameter(k).value for k in DEFAULT_PARAMS}
+        # NEW 7: camera intrinsics for pose estimation
+        # Default: reasonable values for a 1920×1080 webcam.
+        # Override via ROS params or a calibration YAML.
+        # focal length in pixels ≈ (image_width / 2) / tan(hfov/2)
+        # For a typical 70° hFOV cam at 1920px: fx ≈ 1400
+        self.declare_parameter("cam_fx",         1400.0)
+        self.declare_parameter("cam_fy",         1400.0)
+        self.declare_parameter("cam_cx",          960.0)
+        self.declare_parameter("cam_cy",          540.0)
+        self.declare_parameter("cam_k1",            0.0)
+        self.declare_parameter("cam_k2",            0.0)
+        self.declare_parameter("cam_p1",            0.0)
+        self.declare_parameter("cam_p2",            0.0)
+        # NEW 7: physical marker side length in metres (used for solvePnP)
+        # Set to the actual printed size of your markers!
+        self.declare_parameter("target_marker_size_m",  0.019)   # 1.9 cm default
+        self.declare_parameter("trailer_marker_size_m", 0.03)   # 3 cm default
 
-        # Detector cache: dict_name → detector_tuple
+        self.p = {k: self.get_parameter(k).value for k in DEFAULT_PARAMS}
+        self._update_camera_matrix()
+
         self._det_cache: dict = {}
 
         config_path = self.get_parameter("config_path").value
@@ -113,7 +153,11 @@ class DetectorNode(Node):
         self._load_config(config_path)
 
         # EMA filter state
-        self._filt = {"target": None, "trailer": None}
+        self._filt      = {"target": None, "trailer": None}
+        self._filt_lost = {"target": False, "trailer": False}  # FIX 5
+
+        # NEW 7: last raw corners per kind for pose estimation (set in _cb_image)
+        self._last_corners = {"target": None, "trailer": None}
 
         # Subscribers
         self.create_subscription(CompressedImage, "camera/compressed", self._cb_image, 1)
@@ -127,6 +171,8 @@ class DetectorNode(Node):
             self.pub[f"{kind}_data_filt"] = self.create_publisher(Float32MultiArray, f"aruco/{kind}/data_filtered",  10)
             self.pub[f"{kind}_name"]      = self.create_publisher(String,            f"aruco/{kind}/name",           10)
             self.pub[f"{kind}_type"]      = self.create_publisher(String,            f"aruco/{kind}/type",           10)
+            # NEW 7: distance topic
+            self.pub[f"{kind}_distance"]  = self.create_publisher(Float32,           f"aruco/{kind}/distance",       10)
         self.pub["roi_count"] = self.create_publisher(String, "aruco/roi_count", 10)
 
         self.dbg = {k: self.create_publisher(CompressedImage, f"aruco/debug/{k}", 1)
@@ -140,6 +186,53 @@ class DetectorNode(Node):
             f"Detector ready. Dicts: {dicts_in_use}  "
             f"Targets: {list(self.targets.keys())}  Trailers: {list(self.trailers.keys())}"
         )
+
+    # ── Camera matrix ────────────────────────────────────────────────
+    def _update_camera_matrix(self):
+        fx = self.get_parameter("cam_fx").value
+        fy = self.get_parameter("cam_fy").value
+        cx = self.get_parameter("cam_cx").value
+        cy = self.get_parameter("cam_cy").value
+        self._K = np.array([[fx, 0, cx],
+                             [0, fy, cy],
+                             [0,  0,  1]], dtype=np.float64)
+        self._dist = np.array([
+            self.get_parameter("cam_k1").value,
+            self.get_parameter("cam_k2").value,
+            self.get_parameter("cam_p1").value,
+            self.get_parameter("cam_p2").value,
+            0.0], dtype=np.float64)
+        self._target_msize  = self.get_parameter("target_marker_size_m").value
+        self._trailer_msize = self.get_parameter("trailer_marker_size_m").value
+
+    # ── Pose estimation ───────────────────────────────────────────────
+    def _estimate_distance(self, corners_4x2: np.ndarray, marker_size_m: float) -> float:
+        """
+        NEW 7: Run solvePnP on a single detected marker corner set.
+        Returns the Z-distance (depth, metres) of the marker centre.
+        corners_4x2: shape (4,2) float32 — the four corner pixels in order
+                     [top-left, top-right, bottom-right, bottom-left]
+        """
+        half = marker_size_m / 2.0
+        # 3-D object points in marker frame (Z=0 plane)
+        obj_pts = np.array([
+            [-half,  half, 0],
+            [ half,  half, 0],
+            [ half, -half, 0],
+            [-half, -half, 0],
+        ], dtype=np.float64)
+        img_pts = corners_4x2.astype(np.float64)
+        try:
+            ok, rvec, tvec = cv2.solvePnP(
+                obj_pts, img_pts, self._K, self._dist,
+                flags=cv2.SOLVEPNP_IPPE_SQUARE
+                      if hasattr(cv2, "SOLVEPNP_IPPE_SQUARE") else cv2.SOLVEPNP_ITERATIVE
+            )
+            if ok:
+                return float(np.linalg.norm(tvec))
+        except Exception:
+            pass
+        return -1.0   # -1 = estimation failed
 
     # ── Detector cache ────────────────────────────────────────────────
     def _get_det(self, dict_name: str):
@@ -165,7 +258,10 @@ class DetectorNode(Node):
                         val.get("ids", []), val.get("type", ""), val.get("dict", "4x4_50"))
                 else:
                     self.trailers[name] = make_entry(val)
-            self.get_logger().info(f"Config loaded from {path}")
+            self.get_logger().info(
+                f"Config loaded from {path}  "
+                f"targets={list(self.targets.keys())}  trailers={list(self.trailers.keys())}"
+            )
         except Exception as e:
             self.get_logger().error(f"Config load failed: {e}")
 
@@ -177,13 +273,15 @@ class DetectorNode(Node):
                 if k == "targets":
                     self.targets = {
                         n: make_entry(
-                            e.get("ids", []) if isinstance(e, dict) else e,
+                            e.get("ids", [])       if isinstance(e, dict) else e,
+                            e.get("type", "")      if isinstance(e, dict) else "",
                             e.get("dict", "4x4_50") if isinstance(e, dict) else "4x4_50")
                         for n, e in v.items()}
                 elif k == "trailers":
                     self.trailers = {
                         n: make_entry(
-                            e.get("ids", []) if isinstance(e, dict) else e,
+                            e.get("ids", [])       if isinstance(e, dict) else e,
+                            e.get("type", "")      if isinstance(e, dict) else "",
                             e.get("dict", "4x4_50") if isinstance(e, dict) else "4x4_50")
                         for n, e in v.items()}
                 elif k in self.p:
@@ -194,8 +292,8 @@ class DetectorNode(Node):
     def _pub_params(self):
         msg = String()
         payload = dict(self.p)
-        payload["targets"]  = self.targets
-        payload["trailers"] = self.trailers
+        payload["targets"]    = self.targets
+        payload["trailers"]   = self.trailers
         payload["dict_names"] = DICT_NAMES
         msg.data = json.dumps(payload)
         self.params_pub.publish(msg)
@@ -204,9 +302,12 @@ class DetectorNode(Node):
     def _update_filter(self, kind, cx, cy, area, found):
         alpha = self.p["filter_alpha"]
         if not found:
+            if self._filt[kind] is not None:
+                self._filt_lost[kind] = True
             return self._filt[kind]
-        if self._filt[kind] is None:
-            self._filt[kind] = [cx, cy, area]
+        if self._filt[kind] is None or self._filt_lost.get(kind, False):
+            self._filt[kind]      = [cx, cy, area]
+            self._filt_lost[kind] = False
         else:
             f = self._filt[kind]
             f[0] = alpha*cx   + (1-alpha)*f[0]
@@ -216,23 +317,20 @@ class DetectorNode(Node):
 
     # ── Detect on image with all needed dicts ─────────────────────────
     def _detect_all(self, gray) -> dict:
-        """
-        Run detection for every unique dict used in config.
-        Returns: {dict_name: [(cx, cy, area, id), ...]}
-        """
+        """Returns {dict_name: [(cx, cy, area, id, corners_4x2), ...]}"""
         needed = {entry_dict_name(e)
                   for d in (self.targets, self.trailers) for e in d.values()}
         result = {}
         for dn in needed:
-            corners, ids = run_detector(self._get_det(dn), gray)
+            corners_list, ids = run_detector(self._get_det(dn), gray)
             dets = []
             if ids is not None:
-                for corner, mid in zip(corners, ids.flatten()):
-                    pts  = corner[0]
+                for corner, mid in zip(corners_list, ids.flatten()):
+                    pts  = corner[0]          # shape (4,2)
                     cx   = float(np.mean(pts[:, 0]))
                     cy   = float(np.mean(pts[:, 1]))
                     side = float(np.linalg.norm(pts[0] - pts[1]))
-                    dets.append((cx, cy, side*side, int(mid)))
+                    dets.append((cx, cy, side*side, int(mid), pts))
             result[dn] = dets
         return result
 
@@ -265,10 +363,9 @@ class DetectorNode(Node):
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        # Full-frame detection (all dicts)
         snap_by_dict = self._detect_all(gray)
 
-        # Collect all tracked detections (any dict)
+        # Tracked detections now include corners tuple at index [4]
         tracked_on_full = []
         for entry in list(self.targets.values()) + list(self.trailers.values()):
             dn = entry_dict_name(entry)
@@ -276,24 +373,24 @@ class DetectorNode(Node):
                 if d[3] in entry_ids(entry):
                     tracked_on_full.append(d)
 
-        # All unique ids found (for display)
         all_target_ids  = {i for e in self.targets.values()  for i in entry_ids(e)}
         all_trailer_ids = {i for e in self.trailers.values() for i in entry_ids(e)}
 
-        # ROI + zoom
         zoomed_img = None
 
         if tracked_on_full:
             det_by_dict = snap_by_dict
-            roi         = self._roi_from_detections(tracked_on_full, all_target_ids,
-                                                     all_trailer_ids, frame.shape)
-            roi_source  = "marker"
+            # Pass only (cx,cy,area,id) to ROI helper (strip corners)
+            roi = self._roi_from_detections(
+                [(d[0],d[1],d[2],d[3]) for d in tracked_on_full],
+                all_target_ids, all_trailer_ids, frame.shape)
+            roi_source = "marker"
             if roi is not None:
                 rx, ry, rw, rh = roi
                 scale      = p["roi_scale"]
                 zoomed_col = cv2.resize(frame[ry:ry+rh, rx:rx+rw],
                                         (int(rw*scale), int(rh*scale)), interpolation=cv2.INTER_CUBIC)
-                for cx, cy, area, mid in tracked_on_full:
+                for cx, cy, area, mid, _ in tracked_on_full:
                     cz, cyz = int((cx-rx)*scale), int((cy-ry)*scale)
                     cv2.circle(zoomed_col, (cz, cyz), 8, (0,255,100), -1)
                     cv2.putText(zoomed_col, f"ID:{mid}", (cz+10, cyz),
@@ -324,14 +421,15 @@ class DetectorNode(Node):
                             cx_z = float(np.mean(pts[:, 0]))
                             cy_z = float(np.mean(pts[:, 1]))
                             side = float(np.linalg.norm(pts[0]-pts[1])) / scale
-                            dets.append((rx+cx_z/scale, ry+cy_z/scale, side*side, int(mid)))
+                            # Back-project corners to original image coords for solvePnP
+                            orig_pts = pts / scale + np.array([rx, ry])
+                            dets.append((rx+cx_z/scale, ry+cy_z/scale, side*side, int(mid), orig_pts))
                             cv2.circle(zoomed_col, (int(cx_z), int(cy_z)), 8, (0,255,100), -1)
                             cv2.putText(zoomed_col, f"ID:{int(mid)}", (int(cx_z)+10, int(cy_z)),
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,100), 2)
                     det_by_dict[dn] = dets
                 zoomed_img = zoomed_col
 
-            # Fallback: use snap results if zoom found nothing
             if not any(det_by_dict.values()):
                 det_by_dict = snap_by_dict
 
@@ -339,13 +437,17 @@ class DetectorNode(Node):
             zoomed_img = np.zeros((120, 160, 3), dtype=np.uint8)
             cv2.putText(zoomed_img, "No ROI", (10, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (80,80,80), 2)
 
-        # Match using per-entry dict
-        t_found,  t_data,  t_name  = self._match(det_by_dict, self.targets,  roi)
-        tr_found, tr_data, tr_name = self._match(det_by_dict, self.trailers, roi)
+        # Match — now returns corners too
+        t_found,  t_data,  t_name,  t_corners  = self._match(det_by_dict, self.targets,  roi)
+        tr_found, tr_data, tr_name, tr_corners  = self._match(det_by_dict, self.trailers, roi)
 
         # EMA filter
         t_filt  = self._update_filter("target",  t_data[0],  t_data[1],  t_data[2],  t_found)
         tr_filt = self._update_filter("trailer", tr_data[0], tr_data[1], tr_data[2], tr_found)
+
+        # NEW 7: pose estimation → distance
+        t_dist  = self._estimate_distance(t_corners,  self._target_msize)  if (t_found  and t_corners  is not None) else -1.0
+        tr_dist = self._estimate_distance(tr_corners, self._trailer_msize) if (tr_found and tr_corners is not None) else -1.0
 
         # Debug image
         raw_vis = frame.copy()
@@ -356,7 +458,7 @@ class DetectorNode(Node):
             cv2.putText(raw_vis, roi_source, (rx+4,ry+18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, c, 2)
 
         all_dets_flat = [(cx,cy,a,mid,dn)
-                         for dn,dets in det_by_dict.items() for cx,cy,a,mid in dets]
+                         for dn,dets in det_by_dict.items() for cx,cy,a,mid,*_ in dets]
         for cx,cy,a,mid,dn in all_dets_flat:
             col = (0,220,80) if mid in all_target_ids else \
                   (220,80,0) if mid in all_trailer_ids else (220,220,0)
@@ -365,31 +467,38 @@ class DetectorNode(Node):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, col, 1)
         if t_found:
             cv2.circle(raw_vis, (int(t_data[0]),int(t_data[1])), 12, (0,255,80), 2)
+            if t_dist > 0:
+                cv2.putText(raw_vis, f"{t_dist*100:.1f}cm",
+                            (int(t_data[0])+14, int(t_data[1])-10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0,255,80), 2)
         if tr_found:
             cv2.circle(raw_vis, (int(tr_data[0]),int(tr_data[1])), 12, (255,100,0), 2)
+            if tr_dist > 0:
+                cv2.putText(raw_vis, f"{tr_dist*100:.1f}cm",
+                            (int(tr_data[0])+14, int(tr_data[1])-10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255,100,0), 2)
         if t_filt is not None:
-            fx, fy, r = int(t_filt[0]), int(t_filt[1]), 10
-            cv2.line(raw_vis,(fx-r,fy),(fx+r,fy),(200,80,255),2)
-            cv2.line(raw_vis,(fx,fy-r),(fx,fy+r),(200,80,255),2)
-            cv2.circle(raw_vis,(fx,fy),r+4,(200,80,255),1)
-            cv2.putText(raw_vis,"filt",(fx+r+4,fy-4),cv2.FONT_HERSHEY_SIMPLEX,0.4,(200,80,255),1)
+            fx2, fy2, r = int(t_filt[0]), int(t_filt[1]), 10
+            cv2.line(raw_vis,(fx2-r,fy2),(fx2+r,fy2),(200,80,255),2)
+            cv2.line(raw_vis,(fx2,fy2-r),(fx2,fy2+r),(200,80,255),2)
+            cv2.circle(raw_vis,(fx2,fy2),r+4,(200,80,255),1)
         if tr_filt is not None:
-            fx, fy, r = int(tr_filt[0]), int(tr_filt[1]), 10
-            cv2.line(raw_vis,(fx-r,fy),(fx+r,fy),(255,160,50),2)
-            cv2.line(raw_vis,(fx,fy-r),(fx,fy+r),(255,160,50),2)
-            cv2.circle(raw_vis,(fx,fy),r+4,(255,160,50),1)
+            fx2, fy2, r = int(tr_filt[0]), int(tr_filt[1]), 10
+            cv2.line(raw_vis,(fx2-r,fy2),(fx2+r,fy2),(255,160,50),2)
+            cv2.line(raw_vis,(fx2,fy2-r),(fx2,fy2+r),(255,160,50),2)
+            cv2.circle(raw_vis,(fx2,fy2),r+4,(255,160,50),1)
 
         mask_vis = self._make_mask_vis(frame, cube_mask, floor_mask, white_mask, roi)
 
-        self._publish_result("target",  t_found,  t_data,  t_name,  t_filt)
-        self._publish_result("trailer", tr_found, tr_data, tr_name, tr_filt)
+        self._publish_result("target",  t_found,  t_data,  t_name,  t_filt,  t_dist)
+        self._publish_result("trailer", tr_found, tr_data, tr_name, tr_filt, tr_dist)
         rc = String(); rc.data = roi_source; self.pub["roi_count"].publish(rc)
         self._pub_img(raw_vis,    "raw",    now, 70)
         self._pub_img(hsv,        "hsv",    now, 70)
         self._pub_img(mask_vis,   "mask",   now, 70)
         self._pub_img(zoomed_img, "zoomed", now, 80)
 
-    # ── ROI: lowest target ID, then lowest trailer ID ─────────────────
+    # ── ROI helpers ───────────────────────────────────────────────────
     def _roi_from_detections(self, tracked_dets, target_ids, trailer_ids, frame_shape):
         for id_set in (target_ids, trailer_ids):
             cands = [d for d in tracked_dets if d[3] in id_set]
@@ -402,7 +511,6 @@ class DetectorNode(Node):
             return (x,y,w,h) if w>=4 and h>=4 else None
         return None
 
-    # ── ROI from mask ─────────────────────────────────────────────────
     def _find_roi(self, cube_mask, v_channel, p):
         contours, _ = cv2.findContours(cube_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         best = None; best_score = 0.0
@@ -421,7 +529,6 @@ class DetectorNode(Node):
         return (max(0,x-pad), max(0,y-pad),
                 min(W-max(0,x-pad),w+2*pad), min(H-max(0,y-pad),h+2*pad))
 
-    # ── Mask vis ─────────────────────────────────────────────────────
     def _make_mask_vis(self, frame, cube_mask, floor_mask, white_mask, roi):
         vis = (frame*0.35).astype(np.uint8)
         vis[floor_mask>0] = np.array([0,50,0],   dtype=np.uint8)
@@ -434,34 +541,43 @@ class DetectorNode(Node):
             cv2.putText(vis,f"fill:{fill}%",(rx+4,ry+18),cv2.FONT_HERSHEY_SIMPLEX,0.45,(0,230,255),1)
         return vis
 
-    # ── Match — uses per-entry dict ───────────────────────────────────
+    # ── Match — now also returns the corner array for pose estimation ─
     def _match(self, det_by_dict: dict, group_dict: dict, roi):
         for name, entry in group_dict.items():
             dn   = entry_dict_name(entry)
             dets = det_by_dict.get(dn, [])
-            for cx, cy, area, mid in dets:
+            for det in dets:
+                cx, cy, area, mid = det[0], det[1], det[2], det[3]
+                corners = det[4] if len(det) > 4 else None
                 if mid in entry_ids(entry):
-                    return True, [cx,cy,area,float(mid)], name
+                    return True, [cx,cy,area,float(mid)], name, corners
         if roi is not None:
             rx,ry,rw,rh = roi
-            return False, [float(rx+rw/2),float(ry+rh/2),float(rw*rh),-1.0], ""
-        return False, [0.0,0.0,0.0,-1.0], ""
+            return False, [float(rx+rw/2),float(ry+rh/2),float(rw*rh),-1.0], "", None
+        return False, [0.0,0.0,0.0,-1.0], "", None
 
     # ── Publish ───────────────────────────────────────────────────────
-    def _publish_result(self, kind, found, data, name, filt):
-        b = Bool(); b.data=found; self.pub[f"{kind}_found"].publish(b)
-        fa = Float32MultiArray(); fa.data=[float(v) for v in data]; self.pub[f"{kind}_data"].publish(fa)
+    def _publish_result(self, kind, found, data, name, filt, dist=-1.0):
+        b = Bool(); b.data = found; self.pub[f"{kind}_found"].publish(b)
+        fa = Float32MultiArray(); fa.data = [float(v) for v in data]
+        self.pub[f"{kind}_data"].publish(fa)
+        # FIX 6: always publish filtered data
+        ff = Float32MultiArray()
         if filt is not None:
-            ff = Float32MultiArray()
-            ff.data=[float(filt[0]),float(filt[1]),float(filt[2]),float(data[3])]
-            self.pub[f"{kind}_data_filt"].publish(ff)
-        s=String(); s.data=name; self.pub[f"{kind}_name"].publish(s)
+            ff.data = [float(filt[0]), float(filt[1]), float(filt[2]), float(data[3])]
+        else:
+            ff.data = [0.0, 0.0, 0.0, float(data[3])]
+        self.pub[f"{kind}_data_filt"].publish(ff)
+        s = String(); s.data = name; self.pub[f"{kind}_name"].publish(s)
+        # NEW 7: distance
+        dm = Float32(); dm.data = float(dist)
+        self.pub[f"{kind}_distance"].publish(dm)
 
     def _pub_img(self, img, key, stamp, quality=70):
         ok,buf = cv2.imencode(".jpg",img,[cv2.IMWRITE_JPEG_QUALITY,quality])
         if not ok: return
-        msg=CompressedImage(); msg.header.stamp=stamp; msg.format="jpeg"; msg.data=buf.tobytes()
-        self.dbg[key].publish(msg)
+        msg=CompressedImage(); msg.header.stamp=stamp; msg.format="jpeg"
+        msg.data=buf.tobytes(); self.dbg[key].publish(msg)
 
 
 def main(args=None):
