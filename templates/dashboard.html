@@ -85,6 +85,22 @@
   .warn { color: var(--yellow); }
   .err  { color: var(--red); }
 
+  /* ── Direction / alignment indicator ── */
+  .dir-row { display: flex; align-items: center; gap: 7px; }
+  .dir-arrow { font-size: 20px; color: var(--muted); transition: color .12s, text-shadow .12s; line-height: 1; user-select: none; }
+  .dir-arrow.on { color: var(--orange); text-shadow: 0 0 10px rgba(249,115,22,.65); }
+  .dir-track { flex: 1; position: relative; height: 16px; background: var(--surface2); border: 1px solid var(--border-hi); border-radius: 3px; overflow: hidden; }
+  /* green "aligned" zone — matches cx_threshold=0.15: ±15% of half-width = ±7.5% of full width */
+  .dir-zone { position: absolute; inset-block: 0; left: 42.5%; width: 15%; background: rgba(34,197,94,.13); border-left: 1px solid rgba(34,197,94,.35); border-right: 1px solid rgba(34,197,94,.35); }
+  .dir-pip { position: absolute; inset-block: 2px; width: 4px; transform: translateX(-50%); background: var(--accent); border-radius: 2px; left: 50%; transition: left .1s linear, background .15s; }
+  .dir-pip.idle { background: var(--muted); }
+  .dir-pip.warn { background: var(--orange); }
+  .dir-sub { margin-top: 5px; display: flex; justify-content: space-between; align-items: center; }
+  .dir-status { font-size: 9px; color: var(--muted); min-height: 12px; }
+  .dir-status.ok   { color: var(--green); }
+  .dir-status.warn { color: var(--orange); }
+  .dir-tag { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+
   /* ── Control mode panel ── */
   .ctrl-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); }
   .ctrl-row:last-child { border-bottom: none; }
@@ -104,6 +120,7 @@
   .ctrl-status { font-size: 9px; text-align: center; min-height: 14px; padding-top: 4px; color: var(--muted); }
   .ctrl-status.ok  { color: var(--green); }
   .ctrl-status.err { color: var(--red); }
+  .ctrl-divider { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; padding: 8px 0 3px; margin-top: 2px; border-top: 1px solid var(--border); }
 
   /* ── Tune pane ── */
   .tune-pane { padding: 10px 12px; }
@@ -167,6 +184,24 @@
           <div class="state-badge s-UNKNOWN" id="state-badge">UNKNOWN</div>
         </div>
 
+        <!-- ── Alignment / Direction indicator ── -->
+        <div class="sec">
+          <div class="sec-title">Alignment</div>
+          <div class="dir-row">
+            <span class="dir-arrow" id="dir-left">◀</span>
+            <div class="dir-track">
+              <!-- green zone: ±cx_threshold (0.15) around centre -->
+              <div class="dir-zone"></div>
+              <div class="dir-pip idle" id="dir-pip"></div>
+            </div>
+            <span class="dir-arrow" id="dir-right">▶</span>
+          </div>
+          <div class="dir-sub">
+            <span class="dir-status" id="dir-status">—</span>
+            <span class="dir-tag" id="dir-tag"></span>
+          </div>
+        </div>
+
         <!-- ── Approach Mode Control ── -->
         <div class="sec">
           <div class="sec-title">Approach Mode</div>
@@ -197,6 +232,20 @@
               <input class="threshold-input" id="inp-deploy-dist" type="number" step="0.01" min="0.05" max="1.0" value="0.25" oninput="freezeMode()">
               <span class="threshold-unit">m</span>
             </div>
+          </div>
+          <!-- ── Distance approach controller ── -->
+          <div class="ctrl-divider">Distance Approach</div>
+          <div class="ctrl-row">
+            <span class="ctrl-label" title="Schrittlänge = remaining * gain. Kalibrierung: ~1 / Robotergeschwindigkeit [m/s]">Dist gain (s/m)</span>
+            <input class="threshold-input" id="inp-dist-gain" type="number" step="0.5" min="1" max="30" value="8.0" oninput="freezeMode()">
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-label">Step min (s)</span>
+            <input class="threshold-input" id="inp-step-min" type="number" step="0.05" min="0.1" max="2.0" value="0.30" oninput="freezeMode()">
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-label">Step max (s)</span>
+            <input class="threshold-input" id="inp-step-max" type="number" step="0.1" min="0.5" max="5.0" value="2.0" oninput="freezeMode()">
           </div>
           <button class="send-btn" onclick="sendControl()">Apply</button>
           <div class="ctrl-status" id="ctrl-status"></div>
@@ -233,7 +282,7 @@
         <div class="sec">
           <div class="sec-title">Trailer</div>
           <div class="det miss" id="trailer-card">
-            <div class="det-hdr"><div class="ind"></div><span class="det-lbl">Trailer</span><span class="det-nm" id="tr-name">—</span></div>
+            <div class="det-hdr"><div class="ind"></div><span class="det-lbl">Trailer</span><span class="det-nm" id="tr-name">—</span><span id="tr-far-badge" style="display:none;margin-left:4px;font-size:8px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:1px 5px;border-radius:3px;background:rgba(255,200,0,.15);color:#ffc800;border:1px solid rgba(255,200,0,.35);">far</span></div>
             <div class="det-grid">
               <div><div class="dk">cx</div><div class="dv" id="tr-cx">—</div></div>
               <div><div class="dk">cy</div><div class="dv" id="tr-cy">—</div></div>
@@ -288,6 +337,20 @@ watchStream('img-mask',   '/stream/mask');
 watchStream('img-raw',    '/stream/raw');
 watchStream('img-zoomed', '/stream/zoomed');
 
+// IDs of far/large trailer markers — loaded at startup so poll() can show
+// the "far" badge without waiting for the Tune tab to be opened.
+var trailerFarIds = new Set();
+function _loadTrailerFarIds(trailers) {
+  trailerFarIds.clear();
+  Object.values(trailers || {}).forEach(function(e) {
+    (e.far_ids || []).forEach(function(id) { trailerFarIds.add(parseInt(id)); });
+  });
+}
+// Fetch on startup from /api/config (fast, no detector needed)
+fetch('/api/config').then(function(r){ return r.json(); })
+  .then(function(cfg){ _loadTrailerFarIds(cfg.trailers); })
+  .catch(function(){});
+
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(function(t,i){ t.classList.toggle('active', ['status','tune'][i]===name); });
   document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.toggle('active', p.id==='tab-'+name); });
@@ -295,15 +358,15 @@ function switchTab(name) {
 }
 
 // ── Approach Mode Control ─────────────────────────────────────────
-// Local state — kept in sync with FSM via polling
 var modeState = {
   use_distance_target:  true,
   use_distance_trailer: true,
   grasp_distance_m:     0.20,
-  deploy_distance_m:    0.25
+  deploy_distance_m:    0.25,
+  approach_dist_gain:   8.0,
+  approach_step_min:    0.30,
+  approach_step_max:    2.0,
 };
-// While modePending > 0, poll() will NOT overwrite modeState from the API.
-// This prevents the UI from snapping back before the FSM confirms the new value.
 var modePending = 0;
 var modePendingTimer = null;
 
@@ -336,12 +399,13 @@ function updateModeUI() {
   if (modePending === 0) {
     document.getElementById('inp-grasp-dist').value  = modeState.grasp_distance_m.toFixed(2);
     document.getElementById('inp-deploy-dist').value = modeState.deploy_distance_m.toFixed(2);
+    document.getElementById('inp-dist-gain').value   = modeState.approach_dist_gain.toFixed(1);
+    document.getElementById('inp-step-min').value    = modeState.approach_step_min.toFixed(2);
+    document.getElementById('inp-step-max').value    = modeState.approach_step_max.toFixed(1);
   }
 }
 
 function freezeMode() {
-  // Called on any user interaction (button click or input typing).
-  // Prevents poll() from overwriting modeState for 10s or until Apply is sent.
   modePending++;
   clearTimeout(modePendingTimer);
   modePendingTimer = setTimeout(function(){ modePending = 0; }, 10000);
@@ -356,19 +420,28 @@ function setMode(which, mode) {
 
 function sendControl() {
   var status = document.getElementById('ctrl-status');
-  var gd = parseFloat(document.getElementById('inp-grasp-dist').value);
-  var dd = parseFloat(document.getElementById('inp-deploy-dist').value);
-  if (!isNaN(gd))  modeState.grasp_distance_m  = gd;
-  if (!isNaN(dd))  modeState.deploy_distance_m = dd;
+  var gd   = parseFloat(document.getElementById('inp-grasp-dist').value);
+  var dd   = parseFloat(document.getElementById('inp-deploy-dist').value);
+  var dg   = parseFloat(document.getElementById('inp-dist-gain').value);
+  var smin = parseFloat(document.getElementById('inp-step-min').value);
+  var smax = parseFloat(document.getElementById('inp-step-max').value);
+  if (!isNaN(gd))   modeState.grasp_distance_m  = gd;
+  if (!isNaN(dd))   modeState.deploy_distance_m = dd;
+  if (!isNaN(dg))   modeState.approach_dist_gain = dg;
+  if (!isNaN(smin)) modeState.approach_step_min  = smin;
+  if (!isNaN(smax)) modeState.approach_step_max  = smax;
 
   var payload = {
     use_distance_target:  modeState.use_distance_target,
     use_distance_trailer: modeState.use_distance_trailer,
     grasp_distance_m:     modeState.grasp_distance_m,
-    deploy_distance_m:    modeState.deploy_distance_m
+    deploy_distance_m:    modeState.deploy_distance_m,
+    approach_dist_gain:   modeState.approach_dist_gain,
+    approach_step_min:    modeState.approach_step_min,
+    approach_step_max:    modeState.approach_step_max,
   };
-  modePending++;          // ensure frozen (may already be > 0 from setMode)
-  clearTimeout(modePendingTimer);  // cancel the 10s safety timer from setMode
+  modePending++;
+  clearTimeout(modePendingTimer);
   fetch('/api/fsm_control', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -379,7 +452,6 @@ function sendControl() {
     status.textContent = d.ok ? 'Applied' : 'Error';
     status.className = 'ctrl-status ' + (d.ok ? 'ok' : 'err');
     setTimeout(function(){ status.textContent=''; status.className='ctrl-status'; }, 2000);
-    // Release freeze 2s after FSM confirms — enough for the echo to arrive
     modePendingTimer = setTimeout(function(){ modePending = 0; }, 2000);
   })
   .catch(function(){
@@ -402,17 +474,86 @@ function updateDistBar(valId, unitId, barId, distM, threshM) {
   var cm = distM * 100;
   el.textContent = cm.toFixed(1);
   ue.textContent = 'cm';
-  // bar fills as robot gets closer (0% = far, 100% = at threshold)
   var maxDist = 1.5;
   var pct = Math.max(0, Math.min(100, (1 - distM / maxDist) * 100));
   bar.style.width = pct + '%';
-  // turn orange/red when within threshold
   if (threshM > 0 && distM <= threshM) {
     el.style.color = 'var(--orange)'; bar.style.background = 'var(--orange)';
   } else if (threshM > 0 && distM <= threshM * 1.5) {
     el.style.color = 'var(--yellow)'; bar.style.background = 'var(--yellow)';
   } else {
     el.style.color = 'var(--cyan)'; bar.style.background = 'var(--cyan)';
+  }
+}
+
+// ── Direction / alignment indicator ──────────────────────────────
+// Mirrors the FSM alignment logic:
+//   cx_error = (last_cx - 960) / 960   (image width = 1920)
+//   |cx_error| > cx_threshold (0.15) → robot turns/strafes in that direction
+//
+// Arrow direction = direction the ROBOT will move to re-centre the marker.
+//   marker to the right (cx > 960) → robot needs to go RIGHT  → right arrow on
+//   marker to the left  (cx < 960) → robot needs to go LEFT   → left arrow on
+var DIR_IMG_W   = 1920;
+var DIR_CX_HALF = 960;
+var DIR_THRESH  = 0.15;   // must match FSM cx_threshold
+
+function updateDirection(s) {
+  var pip = document.getElementById('dir-pip');
+  var lft = document.getElementById('dir-left');
+  var rgt = document.getElementById('dir-right');
+  var dst = document.getElementById('dir-status');
+  var tag = document.getElementById('dir-tag');
+
+  // Pick whichever marker is currently tracked
+  var cx_val   = null;
+  var tracking = '';
+  if (s.target_found) {
+    cx_val   = s.target_cx_f;
+    tracking = 'target';
+  } else if (s.trailer_found) {
+    cx_val   = s.trailer_cx_f;
+    tracking = 'trailer';
+  }
+
+  if (cx_val !== null && cx_val !== undefined) {
+    // Position the pip (0–100 % of track width)
+    var pct = Math.max(0, Math.min(100, cx_val / DIR_IMG_W * 100));
+    pip.style.left = pct.toFixed(1) + '%';
+
+    var err = (cx_val - DIR_CX_HALF) / DIR_CX_HALF;  // −1 … +1
+
+    if (Math.abs(err) > DIR_THRESH) {
+      pip.className = 'dir-pip warn';
+      if (err > 0) {
+        // Marker is to the right → robot goes right
+        rgt.className = 'dir-arrow on';
+        lft.className = 'dir-arrow';
+        dst.textContent  = '→ strafe right';
+      } else {
+        // Marker is to the left → robot goes left
+        lft.className = 'dir-arrow on';
+        rgt.className = 'dir-arrow';
+        dst.textContent  = '← strafe left';
+      }
+      dst.className = 'dir-status warn';
+    } else {
+      pip.className = 'dir-pip';
+      lft.className = 'dir-arrow';
+      rgt.className = 'dir-arrow';
+      dst.textContent = '✓ aligned';
+      dst.className   = 'dir-status ok';
+    }
+    tag.textContent = tracking;
+  } else {
+    // Nothing tracked
+    pip.style.left  = '50%';
+    pip.className   = 'dir-pip idle';
+    lft.className   = 'dir-arrow';
+    rgt.className   = 'dir-arrow';
+    dst.textContent = '—';
+    dst.className   = 'dir-status';
+    tag.textContent = '';
   }
 }
 
@@ -448,15 +589,20 @@ function poll() {
     badge.className   = 'state-badge s-' + sc;
     badge.textContent = sc;
 
-    // Sync mode UI from FSM — skipped while modePending to avoid
-    // overwriting user changes before the FSM has confirmed them
+    // Sync mode UI from FSM
     if (modePending === 0) {
       if (s.use_distance_target  != null) modeState.use_distance_target  = s.use_distance_target;
       if (s.use_distance_trailer != null) modeState.use_distance_trailer = s.use_distance_trailer;
       if (s.grasp_distance_m     != null) modeState.grasp_distance_m     = s.grasp_distance_m;
       if (s.deploy_distance_m    != null) modeState.deploy_distance_m    = s.deploy_distance_m;
+      if (s.approach_dist_gain   != null) modeState.approach_dist_gain   = s.approach_dist_gain;
+      if (s.approach_step_min    != null) modeState.approach_step_min    = s.approach_step_min;
+      if (s.approach_step_max    != null) modeState.approach_step_max    = s.approach_step_max;
     }
     updateModeUI();
+
+    // Direction indicator
+    updateDirection(s);
 
     // Target
     document.getElementById('target-card').className = 'det ' + (s.target_found ? 'hit' : 'miss');
@@ -477,12 +623,14 @@ function poll() {
       modeState.use_distance_target ? modeState.grasp_distance_m : -1);
 
     // Trailer
+    var trIsFar = s.trailer_found && s.trailer_id >= 0 && trailerFarIds.has(s.trailer_id);
     document.getElementById('trailer-card').className = 'det ' + (s.trailer_found ? 'hit' : 'miss');
     document.getElementById('tr-name').textContent    = s.trailer_name  || '—';
     document.getElementById('tr-cx').textContent      = fv(s.trailer_cx,  0);
     document.getElementById('tr-cy').textContent      = fv(s.trailer_cy,  0);
     document.getElementById('tr-area').textContent    = fv(s.trailer_area,0);
     document.getElementById('tr-id').textContent      = (s.trailer_id >= 0) ? s.trailer_id : '—';
+    document.getElementById('tr-far-badge').style.display = trIsFar ? '' : 'none';
     var trPct = Math.min(100, (s.trailer_area_f || 0) / areaMax * 100);
     document.getElementById('tr-area-big').textContent  = fv(s.trailer_area,   0);
     document.getElementById('tr-area-filt').textContent = fv(s.trailer_area_f, 0);
@@ -537,6 +685,9 @@ var PARAM_DEFS = [
   { group: "EMA Filter", params: [
     { key: "filter_alpha", label: "Alpha (0=frozen 1=raw)", min:0.01, max:1.0, step:0.01, type:"float" },
   ]},
+  { group: "Persistence", params: [
+    { key: "persist_ttl", label: "Hold duration (s)", min:0.1, max:3.0, step:0.1, type:"float" },
+  ]},
 ];
 
 var currentParams = {}; var sliderValues = {};
@@ -578,21 +729,57 @@ var DICT_OPTIONS = ["4x4_50","4x4_100","4x4_250","4x4_1000","5x5_50","5x5_100","
 function renderConfigEntries(dict, kind) {
   var html = '';
   Object.entries(dict).forEach(function(kv) {
-    var name=kv[0]; var entry=kv[1];
-    var ids=Array.isArray(entry)?entry:(entry.ids||[]);
-    var dictVal=Array.isArray(entry)?'4x4_50':(entry.dict||'4x4_50');
-    var opts=DICT_OPTIONS.map(function(d){ return '<option value="'+d+'" '+(d===dictVal?'selected':'')+'>'+d+'</option>'; }).join('');
-    html+='<div class="cfg-block"><div class="cfg-row">'
-      +'<input class="cfg-name" value="'+name+'" onchange="renameConfigEntry(\''+kind+'\',\''+name+'\',this.value)">'
-      +'<button class="cfg-del" onclick="removeConfigEntry(\''+kind+'\',\''+name+'\')">&#x2715;</button></div>'
-      +'<div class="cfg-row"><span class="cfg-label">IDs</span>'
-      +'<input class="cfg-ids" value="'+ids.join(', ')+'" onchange="updateConfigField(\''+kind+'\',\''+name+'\',\'ids\',this.value)"></div>'
-      +'<div class="cfg-row"><span class="cfg-label">Dict</span>'
-      +'<select class="cfg-dict" onchange="updateConfigField(\''+kind+'\',\''+name+'\',\'dict\',this.value)"'
-      +' style="flex:1;background:var(--surface2);border:1px solid var(--border-hi);border-radius:3px;color:var(--accent);font-family:inherit;font-size:9px;padding:2px 4px;cursor:pointer;">'
-      +opts+'</select></div></div>';
+    var name = kv[0]; var entry = kv[1];
+    var ids      = Array.isArray(entry) ? entry : (entry.ids  || []);
+    var dictVal  = Array.isArray(entry) ? '4x4_50' : (entry.dict || '4x4_50');
+    var msize    = (typeof entry === 'object' && entry.marker_size_m != null) ? entry.marker_size_m : '';
+    var opts = DICT_OPTIONS.map(function(d){ return '<option value="'+d+'" '+(d===dictVal?'selected':'')+'>'+d+'</option>'; }).join('');
+
+    html += '<div class="cfg-block">';
+    // Name + delete
+    html += '<div class="cfg-row">'
+          + '<input class="cfg-name" value="'+name+'" onchange="renameConfigEntry(\''+kind+'\',\''+name+'\',this.value)">'
+          + '<button class="cfg-del" onclick="removeConfigEntry(\''+kind+'\',\''+name+'\')">&#x2715;</button></div>';
+    // Primary IDs
+    html += '<div class="cfg-row"><span class="cfg-label">IDs</span>'
+          + '<input class="cfg-ids" value="'+ids.join(', ')+'" onchange="updateConfigField(\''+kind+'\',\''+name+'\',\'ids\',this.value)"></div>';
+    // Dict
+    html += '<div class="cfg-row"><span class="cfg-label">Dict</span>'
+          + '<select class="cfg-dict" onchange="updateConfigField(\''+kind+'\',\''+name+'\',\'dict\',this.value)"'
+          + ' style="flex:1;background:var(--surface2);border:1px solid var(--border-hi);border-radius:3px;color:var(--accent);font-family:inherit;font-size:9px;padding:2px 4px;cursor:pointer;">'
+          + opts + '</select></div>';
+    // Marker size
+    html += '<div class="cfg-row"><span class="cfg-label">Size m</span>'
+          + '<input class="cfg-ids" type="number" step="0.001" min="0.001" max="1.0" placeholder="global" value="'+msize+'"'
+          + ' onchange="updateConfigField(\''+kind+'\',\''+name+'\',\'marker_size_m\',this.value)"'
+          + ' style="flex:1;text-align:right;"></div>';
+
+    // ── Far marker section (trailers only) ───────────────────────────
+    if (kind === 'trailer') {
+      var farIds  = (typeof entry === 'object' && entry.far_ids)  ? entry.far_ids  : [];
+      var farDict = (typeof entry === 'object' && entry.far_dict) ? entry.far_dict : '4x4_50';
+      var farSize = (typeof entry === 'object' && entry.far_marker_size_m != null) ? entry.far_marker_size_m : '';
+      var farOpts = DICT_OPTIONS.map(function(d){ return '<option value="'+d+'" '+(d===farDict?'selected':'')+'>'+d+'</option>'; }).join('');
+
+      html += '<div style="font-size:8px;color:var(--muted);text-transform:uppercase;'
+            + 'letter-spacing:.09em;padding:5px 0 2px;margin-top:2px;border-top:1px dashed var(--border);">'
+            + 'Far marker (optional fallback)</div>';
+      html += '<div class="cfg-row"><span class="cfg-label">IDs</span>'
+            + '<input class="cfg-ids" value="'+farIds.join(', ')+'" placeholder="none — leave empty to disable"'
+            + ' onchange="updateConfigField(\''+kind+'\',\''+name+'\',\'far_ids\',this.value)"></div>';
+      html += '<div class="cfg-row"><span class="cfg-label">Dict</span>'
+            + '<select class="cfg-dict" onchange="updateConfigField(\''+kind+'\',\''+name+'\',\'far_dict\',this.value)"'
+            + ' style="flex:1;background:var(--surface2);border:1px solid var(--border-hi);border-radius:3px;color:var(--accent);font-family:inherit;font-size:9px;padding:2px 4px;cursor:pointer;">'
+            + farOpts + '</select></div>';
+      html += '<div class="cfg-row"><span class="cfg-label">Size m</span>'
+            + '<input class="cfg-ids" type="number" step="0.001" min="0.001" max="1.0" placeholder="required" value="'+farSize+'"'
+            + ' onchange="updateConfigField(\''+kind+'\',\''+name+'\',\'far_marker_size_m\',this.value)"'
+            + ' style="flex:1;text-align:right;"></div>';
+    }
+
+    html += '</div>';
   });
-  return html||'<div style="font-size:9px;color:var(--muted);padding:4px 0">No entries</div>';
+  return html || '<div style="font-size:9px;color:var(--muted);padding:4px 0">No entries</div>';
 }
 
 function refreshConfigSection(kind) {
@@ -601,7 +788,10 @@ function refreshConfigSection(kind) {
 function addConfigEntry(kind) {
   var dict=kind==='target'?editTargets:editTrailers;
   var n=1; while(dict['new_'+n]!==undefined)n++;
-  dict['new_'+n]={ids:[],dict:'4x4_50'}; refreshConfigSection(kind);
+  var newEntry = {ids:[], dict:'4x4_50'};
+  if (kind === 'trailer') { newEntry.far_ids = []; newEntry.far_dict = '4x4_50'; }
+  dict['new_'+n] = newEntry;
+  refreshConfigSection(kind);
 }
 function removeConfigEntry(kind,name){ var d=kind==='target'?editTargets:editTrailers; delete d[name]; refreshConfigSection(kind); }
 function renameConfigEntry(kind,old,nw) {
@@ -611,8 +801,14 @@ function renameConfigEntry(kind,old,nw) {
 function updateConfigField(kind,name,field,raw) {
   var d=kind==='target'?editTargets:editTrailers;
   if(!d[name]||Array.isArray(d[name]))d[name]={ids:Array.isArray(d[name])?d[name]:[],dict:'4x4_50'};
-  if(field==='ids')d[name].ids=raw.split(',').map(function(s){return parseInt(s.trim());}).filter(function(n){return!isNaN(n);});
-  else d[name][field]=raw.trim();
+  if(field==='ids'||field==='far_ids'){
+    d[name][field]=raw.split(',').map(function(s){return parseInt(s.trim());}).filter(function(n){return!isNaN(n);});
+  } else if(field==='marker_size_m'||field==='far_marker_size_m'){
+    var v=parseFloat(raw);
+    if(!isNaN(v)&&v>0) d[name][field]=v; else delete d[name][field];
+  } else {
+    d[name][field]=raw.trim();
+  }
 }
 function onSlider(key,type,raw) {
   var val=type==='float'?parseFloat(raw):parseInt(raw); sliderValues[key]=val;
@@ -636,7 +832,12 @@ function loadConfig() {
   .then(function(rs){return Promise.all(rs.map(function(r){return r.json();}));})
   .then(function(ds){
     var cfg=ds[0]; var p=ds[1]||{};
-    p.targets=cfg.targets||{}; p.trailers=cfg.trailers||{};
+    // Prefer live detector state from /api/params (has all fields including
+    // marker_size_m, far_ids etc); fall back to /api/config only when params
+    // haven't been published yet (empty targets/trailers).
+    if (!p.targets  || Object.keys(p.targets).length  === 0) p.targets  = cfg.targets  || {};
+    if (!p.trailers || Object.keys(p.trailers).length === 0) p.trailers = cfg.trailers || {};
+    _loadTrailerFarIds(p.trailers);   // keep badge set in sync with live state
     buildTuneUI(p); tuneLoaded=true;
   }).catch(function(e){
     document.getElementById('tune-pane').innerHTML='<div style="padding:16px;color:var(--red);font-size:10px">Config load failed: '+e+'</div>';

@@ -46,6 +46,10 @@ class DashboardNode(Node):
             "use_distance_trailer": True,
             "grasp_distance_m":     0.20,
             "deploy_distance_m":    0.25,
+            # Distance-mode approach controller
+            "approach_dist_gain":   8.0,
+            "approach_step_min":    0.3,
+            "approach_step_max":    2.0,
         }
         self._frame_times   = []
         self.detector_params = {}
@@ -110,7 +114,8 @@ class DashboardNode(Node):
             d = json.loads(m.data)
             with self._state_lock:
                 for k in ("use_distance_target", "use_distance_trailer",
-                          "grasp_distance_m", "deploy_distance_m"):
+                          "grasp_distance_m", "deploy_distance_m",
+                          "approach_dist_gain", "approach_step_min", "approach_step_max"):
                     if k in d:
                         self.state[k] = d[k]
         except Exception:
@@ -216,12 +221,22 @@ class DashboardNode(Node):
                 for key in ("targets", "trailers"):
                     for name, val in (cfg.get(key) or {}).items():
                         if isinstance(val, dict):
-                            result[key][name] = {
+                            entry = {
                                 "ids":  [int(i) for i in val.get("ids",  [])],
                                 "dict": str(val.get("dict", "4x4_50")),
                             }
+                            if val.get("marker_size_m") is not None:
+                                entry["marker_size_m"] = float(val["marker_size_m"])
+                            if key == "trailers" and val.get("far_ids"):
+                                entry["far_ids"]  = [int(i) for i in val["far_ids"]]
+                                entry["far_dict"] = str(val.get("far_dict",
+                                                              val.get("dict", "4x4_50")))
+                                if val.get("far_marker_size_m") is not None:
+                                    entry["far_marker_size_m"] = float(val["far_marker_size_m"])
+                            result[key][name] = entry
                         else:
-                            result[key][name] = {"ids": [int(i) for i in val], "dict": "4x4_50"}
+                            result[key][name] = {"ids": [int(i) for i in val],
+                                                 "dict": "4x4_50"}
                 return jsonify(result)
             except Exception as e:
                 return jsonify({"error": str(e), "targets": {}, "trailers": {}}), 500
@@ -242,16 +257,16 @@ class DashboardNode(Node):
 
         @app.route("/api/fsm_control", methods=["POST"])
         def api_fsm_control():
-            """Send a control command to the FSM node."""
             cmd = request.get_json()
             if not cmd:
                 return jsonify({"error": "no data"}), 400
             msg = String(); msg.data = json.dumps(cmd)
             self.control_pub.publish(msg)
-            # Optimistically update local state
+            # Optimistic local update
             with self._state_lock:
                 for k in ("use_distance_target", "use_distance_trailer",
-                          "grasp_distance_m", "deploy_distance_m"):
+                          "grasp_distance_m", "deploy_distance_m",
+                          "approach_dist_gain", "approach_step_min", "approach_step_max"):
                     if k in cmd:
                         self.state[k] = cmd[k]
             return jsonify({"ok": True})
