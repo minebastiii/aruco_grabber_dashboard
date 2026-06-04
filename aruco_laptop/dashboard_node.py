@@ -50,6 +50,8 @@ class DashboardNode(Node):
             "approach_dist_gain":   8.0,
             "approach_step_min":    0.3,
             "approach_step_max":    2.0,
+            # Robot battery level (0-100, -1 = unknown)
+            "battery":              -1.0,
         }
         self._frame_times   = []
         self.detector_params = {}
@@ -74,6 +76,7 @@ class DashboardNode(Node):
             (CompressedImage,   "aruco/debug/mask",            self._cb_mask),
             (CompressedImage,   "aruco/debug/zoomed",          self._cb_zoomed),
             (String,            "detector/params/current",     self._cb_params_current),
+            (Float32,           "robot/battery",               self._cb_battery),
         ]
         for msg_type, topic, cb in subs:
             self.create_subscription(msg_type, topic, cb, 1)
@@ -160,6 +163,9 @@ class DashboardNode(Node):
     def _cb_params_current(self, m):
         try: self.detector_params = json.loads(m.data)
         except Exception: pass
+
+    def _cb_battery(self, m):
+        with self._state_lock: self.state["battery"] = float(m.data)
 
     def _check_state_staleness(self):
         with self._state_lock:

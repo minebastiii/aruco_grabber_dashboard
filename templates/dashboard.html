@@ -28,6 +28,24 @@
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
   .fps-badge { margin-left: auto; font-size: 11px; color: var(--muted); }
   .fps-badge b { color: var(--accent); }
+
+  /* ── Battery indicator (header) ── */
+  .batt-wrap { display:flex; align-items:center; gap:5px; font-size:11px; }
+  .batt-body { position:relative; width:24px; height:12px; border:1.5px solid currentColor; border-radius:2px; padding:1.5px; color:var(--muted); }
+  .batt-body::after { content:''; position:absolute; right:-4px; top:50%; transform:translateY(-50%); width:3px; height:6px; background:currentColor; border-radius:0 1px 1px 0; }
+  .batt-fill { height:100%; border-radius:1px; width:0%; transition: width .4s, background .3s; background: var(--green); }
+  .batt-pct  { font-size:11px; font-weight:600; color:var(--muted); min-width:32px; }
+  .batt-wrap.ok   .batt-body { color: var(--green); }
+  .batt-wrap.warn .batt-body { color: var(--yellow); }
+  .batt-wrap.crit .batt-body { color: var(--red); }
+  .batt-wrap.crit .batt-fill { animation: batt-pulse 1s infinite; }
+  @keyframes batt-pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+  /* ── Low-battery banner (status tab) ── */
+  .batt-banner { display:none; margin:8px 14px 0; padding:6px 10px; border-radius:4px;
+    background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.35);
+    color:var(--red); font-size:10px; font-weight:700; letter-spacing:.06em;
+    text-transform:uppercase; text-align:center; animation: batt-pulse 1.4s infinite; }
   .video-grid { display: grid; grid-template-rows: 1fr 1fr; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); overflow: hidden; }
   .vpanel { background: #000; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
   .vpanel img { width: 100%; height: 100%; object-fit: contain; display: block; }
@@ -160,6 +178,11 @@
     <div class="hsep"></div>
     <div class="conn-pill off" id="conn-pill"><div class="dot"></div><span id="conn-text">Disconnected</span></div>
     <div class="fps-badge">fps: <b id="fps-val">—</b></div>
+    <div class="hsep"></div>
+    <div class="batt-wrap" id="batt-wrap">
+      <div class="batt-body"><div class="batt-fill" id="batt-fill"></div></div>
+      <span class="batt-pct" id="batt-pct">—</span>
+    </div>
   </header>
 
   <div class="video-grid">
@@ -178,6 +201,8 @@
 
       <!-- STATUS TAB -->
       <div class="tab-pane active" id="tab-status">
+
+        <div class="batt-banner" id="batt-banner">⚠ Battery low — charge immediately</div>
 
         <div class="sec">
           <div class="sec-title">Robot State</div>
@@ -601,8 +626,41 @@ function poll() {
     }
     updateModeUI();
 
-    // Direction indicator
-    updateDirection(s);
+    // Battery indicator
+    (function() {
+      var batt   = (s.battery != null) ? s.battery : -1;
+      var wrap   = document.getElementById('batt-wrap');
+      var fill   = document.getElementById('batt-fill');
+      var pct    = document.getElementById('batt-pct');
+      var banner = document.getElementById('batt-banner');
+      if (batt >= 0) {
+        var p = Math.round(Math.max(0, Math.min(100, batt)));
+        fill.style.width = p + '%';
+        pct.textContent  = p + '%';
+        if (p <= 20) {
+          fill.style.background = 'var(--red)';
+          pct.style.color       = 'var(--red)';
+          wrap.className        = 'batt-wrap crit';
+          banner.style.display  = 'block';
+        } else if (p <= 50) {
+          fill.style.background = 'var(--yellow)';
+          pct.style.color       = 'var(--yellow)';
+          wrap.className        = 'batt-wrap warn';
+          banner.style.display  = 'none';
+        } else {
+          fill.style.background = 'var(--green)';
+          pct.style.color       = 'var(--green)';
+          wrap.className        = 'batt-wrap ok';
+          banner.style.display  = 'none';
+        }
+      } else {
+        fill.style.width = '0%';
+        pct.textContent  = '—';
+        pct.style.color  = 'var(--muted)';
+        wrap.className   = 'batt-wrap';
+        banner.style.display = 'none';
+      }
+    })();
 
     // Target
     document.getElementById('target-card').className = 'det ' + (s.target_found ? 'hit' : 'miss');
