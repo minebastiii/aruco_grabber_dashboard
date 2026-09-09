@@ -4,179 +4,180 @@
 <meta charset="UTF-8">
 <title>ArUco Cube System</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #080b10; --surface: #0d1117; --surface2: #111620;
-    --border: #1c2230; --border-hi: #2a3450;
-    --text: #c9d1e0; --muted: #4a5568;
-    --accent: #3b82f6; --green: #22c55e; --orange: #f97316;
-    --red: #ef4444; --yellow: #eab308; --purple: #a855f7; --cyan: #06b6d4;
+    --bg: #060810; --surface: #0b0f19; --surface2: #121a2a;
+    --border: #202a40; --border-hi: #34456b;
+    --text: #dbe4f5; --muted: #5b6b8c;
+    --accent: #00d9ff; --accent-dim: #0891b2;
+    --green: #2ee889; --orange: #ff9d3d;
+    --red: #ff4d5e; --yellow: #f5c518; --purple: #b46bff; --cyan: #00d9ff;
   }
-  html, body { background: var(--bg); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 13px; height: 100vh; overflow: hidden; }
-  .layout { display: grid; grid-template-rows: 48px 1fr; grid-template-columns: 1fr 280px; height: 100vh; }
-  header { grid-column: 1/-1; display: flex; align-items: center; gap: 14px; padding: 0 18px; border-bottom: 1px solid var(--border); background: var(--surface); }
-  .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: #fff; }
-  .logo span { color: var(--accent); }
-  .hsep { width: 1px; height: 18px; background: var(--border-hi); }
-  .conn-pill { display: flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 20px; border: 1px solid var(--border-hi); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-  .conn-pill.on  { color: var(--green);  border-color: #166534; background: #052012; }
-  .conn-pill.off { color: var(--red);    border-color: #7f1d1d; background: #1c0505; }
-  .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-  .conn-pill.on .dot { animation: blink 1.4s infinite; }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
-  .fps-badge { margin-left: auto; font-size: 11px; color: var(--muted); }
-  .fps-badge b { color: var(--accent); }
+  html, body {
+    background: var(--bg); color: var(--text); font-family: 'JetBrains Mono', monospace;
+    font-size: 15px; height: 100vh; overflow: hidden;
+  }
+  body {
+    background-image:
+      radial-gradient(circle at 15% 10%, rgba(0,217,255,.05), transparent 40%),
+      radial-gradient(circle at 85% 90%, rgba(180,107,255,.05), transparent 40%);
+  }
+  .layout { display: grid; grid-template-rows: 68px 1fr; grid-template-columns: 1fr 480px; height: 100vh; }
 
-  /* ── Battery indicator (header) ── */
-  .batt-wrap { display:flex; align-items:center; gap:5px; font-size:11px; }
-  .batt-body { position:relative; width:24px; height:12px; border:1.5px solid currentColor; border-radius:2px; padding:1.5px; color:var(--muted); }
-  .batt-body::after { content:''; position:absolute; right:-4px; top:50%; transform:translateY(-50%); width:3px; height:6px; background:currentColor; border-radius:0 1px 1px 0; }
+  header {
+    grid-column: 1/-1; display: flex; align-items: center; gap: 18px; padding: 0 24px;
+    border-bottom: 1px solid var(--border); background: var(--surface);
+    box-shadow: 0 1px 0 rgba(0,217,255,.08);
+  }
+  .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 19px; letter-spacing: .1em; text-transform: uppercase; color: #fff; text-shadow: 0 0 18px rgba(0,217,255,.35); }
+  .logo span { color: var(--accent); }
+  .hsep { width: 1px; height: 24px; background: var(--border-hi); }
+  .conn-pill { display: flex; align-items: center; gap: 7px; padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border-hi); font-size: 12px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+  .conn-pill.on  { color: var(--green);  border-color: #12603f; background: #03170e; box-shadow: 0 0 14px rgba(46,232,137,.15); }
+  .conn-pill.off { color: var(--red);    border-color: #7a1f28; background: #1a0508; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .conn-pill.on .dot { animation: blink 1.4s infinite; box-shadow: 0 0 6px currentColor; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+  .fps-badge { margin-left: auto; font-size: 13px; color: var(--muted); }
+  .fps-badge b { color: var(--accent); }
+  .domain-badge { font-size: 13px; color: var(--muted); letter-spacing: .06em; }
+  .domain-badge b { color: var(--purple); }
+
+  .batt-wrap { display:flex; align-items:center; gap:7px; font-size:13px; }
+  .batt-body { position:relative; width:30px; height:15px; border:2px solid currentColor; border-radius:2px; padding:2px; color:var(--muted); }
+  .batt-body::after { content:''; position:absolute; right:-5px; top:50%; transform:translateY(-50%); width:3px; height:7px; background:currentColor; border-radius:0 1px 1px 0; }
   .batt-fill { height:100%; border-radius:1px; width:0%; transition: width .4s, background .3s; background: var(--green); }
-  .batt-pct  { font-size:11px; font-weight:600; color:var(--muted); min-width:32px; }
+  .batt-pct  { font-size:13px; font-weight:700; color:var(--muted); min-width:38px; }
   .batt-wrap.ok   .batt-body { color: var(--green); }
   .batt-wrap.warn .batt-body { color: var(--yellow); }
   .batt-wrap.crit .batt-body { color: var(--red); }
   .batt-wrap.crit .batt-fill { animation: batt-pulse 1s infinite; }
   @keyframes batt-pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
 
-  /* ── Low-battery banner (status tab) ── */
-  .batt-banner { display:none; margin:8px 14px 0; padding:6px 10px; border-radius:4px;
-    background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.35);
-    color:var(--red); font-size:10px; font-weight:700; letter-spacing:.06em;
-    text-transform:uppercase; text-align:center; animation: batt-pulse 1.4s infinite; }
-  .video-grid { display: grid; grid-template-rows: 1fr 1fr; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); overflow: hidden; }
-  .vpanel { background: #000; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-  .vpanel img { width: 100%; height: 100%; object-fit: contain; display: block; }
-  .vlabel { position: absolute; top: 8px; left: 10px; z-index: 2; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; backdrop-filter: blur(4px); pointer-events: none; }
-  .l-hsv    { background: rgba(168,85,247,.15);  color: var(--purple); border: 1px solid rgba(168,85,247,.3); }
-  .l-mask   { background: rgba(6,182,212,.15);   color: var(--cyan);   border: 1px solid rgba(6,182,212,.3); }
-  .l-roi    { background: rgba(34,197,94,.12);   color: var(--green);  border: 1px solid rgba(34,197,94,.3); }
-  .l-zoomed { background: rgba(249,115,22,.15);  color: var(--orange); border: 1px solid rgba(249,115,22,.3); }
+  /* ── Video panel (single live feed) ── */
+  .video-wrap { background: #000; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; border-right: 1px solid var(--border); }
+  .video-wrap img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .vlabel {
+    position: absolute; top: 14px; left: 16px; z-index: 2; font-size: 11px; font-weight: 800;
+    letter-spacing: .14em; text-transform: uppercase; padding: 5px 12px; border-radius: 4px;
+    backdrop-filter: blur(6px); pointer-events: none;
+    background: rgba(0,217,255,.1); color: var(--accent); border: 1px solid rgba(0,217,255,.35);
+  }
+  .vlabel .dot { display:inline-block; margin-right:6px; }
+
   aside { border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; overflow: hidden; }
   .tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .tab { flex: 1; padding: 9px 0; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; text-align: center; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; transition: all .2s; }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); background: rgba(59,130,246,.06); }
+  .tab { flex: 1; padding: 13px 0; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; text-align: center; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; transition: all .2s; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); background: rgba(0,217,255,.06); text-shadow: 0 0 10px rgba(0,217,255,.3); }
   .tab-content { flex: 1; overflow-y: auto; }
   .tab-pane { display: none; }
   .tab-pane.active { display: block; }
-  .sec { padding: 12px 14px; border-bottom: 1px solid var(--border); }
-  .sec-title { font-family: 'Syne', sans-serif; font-size: 9px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
-  .state-badge { display: block; padding: 5px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; text-align: center; text-transform: uppercase; }
-  .s-SEARCH,.s-SEARCH_TURNING,.s-SEARCH_WAIT       { background:#1a1a2e; color:#7b8cde; border:1px solid #2d2d6e; }
-  .s-ALIGN,.s-ALIGN_TURNING,.s-ALIGN_WAIT          { background:#1a2620; color:#5bc98a; border:1px solid #1a5c3a; }
-  .s-APPROACH,.s-APPROACH_FORWARD,.s-APPROACH_BACK { background:#1a2e1a; color:var(--green); border:1px solid #1a5c1a; }
-  .s-GRASP  { background:#2e1a0a; color:var(--orange); border:1px solid #7a3a0a; }
-  .s-VERIFY { background:#2e2a0a; color:var(--yellow); border:1px solid #7a6a0a; }
-  .s-DEPLOY { background:#2e1a0a; color:var(--orange); border:1px solid #7a3a0a; }
-  .s-DONE   { background:#0a2e1a; color:#4ade80;       border:1px solid #0a7a3a; }
-  .s-UNKNOWN { background:#1a1a1a; color:var(--muted); border:1px solid #2a2a2a; }
-  .det { border-radius: 5px; border: 1px solid var(--border-hi); padding: 8px 10px; margin-bottom: 6px; }
-  .det.hit  { border-color: #166534; background: #03110a; }
-  .det-hdr  { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
-  .ind { width: 7px; height: 7px; border-radius: 50%; }
-  .hit  .ind { background: var(--green); box-shadow: 0 0 5px var(--green); }
-  .miss .ind { background: var(--muted); }
-  .det-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; }
-  .det-nm  { margin-left: auto; font-size: 9px; color: var(--accent); max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .det-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 6px; }
-  .dk { font-size: 8px; color: var(--muted); text-transform: uppercase; }
-  .dv { font-size: 11px; font-weight: 600; }
-  .dist-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
-  .dist-label { font-size: 8px; color: var(--muted); text-transform: uppercase; flex-shrink: 0; }
-  .dist-val { font-size: 15px; font-weight: 700; color: var(--cyan); min-width: 52px; }
-  .dist-unit { font-size: 9px; color: var(--muted); flex-shrink: 0; }
-  .dist-bar-wrap { flex: 1; background: var(--border); border-radius: 3px; height: 4px; overflow: hidden; }
-  .dist-bar-fill { height: 100%; border-radius: 3px; transition: width 0.15s, background 0.3s; background: var(--cyan); }
-  .area-display { margin-top: 6px; }
-  .area-nums { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
-  .area-big { font-size: 16px; font-weight: 700; color: var(--text); }
-  .area-filt { font-size: 10px; color: var(--purple); }
-  .area-bar-wrap { background: var(--border); border-radius: 3px; height: 5px; overflow: hidden; }
-  .area-bar-fill { height: 100%; border-radius: 3px; transition: width 0.15s, background 0.3s; background: var(--accent); }
-  .stat { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border); }
-  .stat:last-child { border-bottom: none; }
-  .sk { font-size: 9px; color: var(--muted); }
-  .sv { font-size: 11px; font-weight: 600; }
-  .ok   { color: var(--green); }
-  .warn { color: var(--yellow); }
-  .err  { color: var(--red); }
+  .sec { padding: 16px 18px; border-bottom: 1px solid var(--border); }
+  .sec-title { font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+  .state-badge { display: block; padding: 10px 14px; border-radius: 5px; font-size: 16px; font-weight: 800; text-align: center; text-transform: uppercase; letter-spacing: .06em; }
+  .s-SEARCH,.s-SEARCH_TURNING,.s-SEARCH_WAIT       { background:#161a30; color:#8fa0ec; border:1px solid #303a72; }
+  .s-ALIGN,.s-ALIGN_TURNING,.s-ALIGN_WAIT          { background:#12271e; color:#5fe0a0; border:1px solid #1a6b45; }
+  .s-APPROACH,.s-APPROACH_FORWARD,.s-APPROACH_BACK { background:#122714; color:var(--green); border:1px solid #1a6b1a; box-shadow: 0 0 16px rgba(46,232,137,.12); }
+  .s-GRASP  { background:#2c1a0a; color:var(--orange); border:1px solid #8a4410; }
+  .s-VERIFY { background:#2c280a; color:var(--yellow); border:1px solid #8a7e10; }
+  .s-DEPLOY { background:#2c1a0a; color:var(--orange); border:1px solid #8a4410; }
+  .s-DONE   { background:#0a2c1a; color:#5fe0a0;       border:1px solid #0a8a45; box-shadow: 0 0 16px rgba(46,232,137,.18); }
+  .s-UNKNOWN { background:#161616; color:var(--muted); border:1px solid #2a2a2a; }
 
-  /* ── Direction / alignment indicator ── */
-  .dir-row { display: flex; align-items: center; gap: 7px; }
-  .dir-arrow { font-size: 20px; color: var(--muted); transition: color .12s, text-shadow .12s; line-height: 1; user-select: none; }
-  .dir-arrow.on { color: var(--orange); text-shadow: 0 0 10px rgba(249,115,22,.65); }
-  .dir-track { flex: 1; position: relative; height: 16px; background: var(--surface2); border: 1px solid var(--border-hi); border-radius: 3px; overflow: hidden; }
-  /* green "aligned" zone — matches cx_threshold=0.15: ±15% of half-width = ±7.5% of full width */
-  .dir-zone { position: absolute; inset-block: 0; left: 42.5%; width: 15%; background: rgba(34,197,94,.13); border-left: 1px solid rgba(34,197,94,.35); border-right: 1px solid rgba(34,197,94,.35); }
-  .dir-pip { position: absolute; inset-block: 2px; width: 4px; transform: translateX(-50%); background: var(--accent); border-radius: 2px; left: 50%; transition: left .1s linear, background .15s; }
-  .dir-pip.idle { background: var(--muted); }
+  .det { border-radius: 6px; border: 1px solid var(--border-hi); padding: 12px 14px; }
+  .det.hit  { border-color: #12603f; background: #041c11; box-shadow: 0 0 18px rgba(46,232,137,.08); }
+  .det-hdr  { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .ind { width: 8px; height: 8px; border-radius: 50%; }
+  .hit  .ind { background: var(--green); box-shadow: 0 0 7px var(--green); }
+  .miss .ind { background: var(--muted); }
+  .det-lbl { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; }
+  .det-nm  { margin-left: auto; font-size: 11px; color: var(--accent); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .det-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+  .dk { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .dv { font-size: 13px; font-weight: 700; }
+  .dist-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .dist-label { font-size: 9px; color: var(--muted); text-transform: uppercase; flex-shrink: 0; }
+  .dist-val { font-size: 19px; font-weight: 800; color: var(--cyan); min-width: 62px; }
+  .dist-unit { font-size: 10px; color: var(--muted); flex-shrink: 0; }
+  .dist-bar-wrap { flex: 1; background: var(--border); border-radius: 3px; height: 6px; overflow: hidden; }
+  .dist-bar-fill { height: 100%; border-radius: 3px; transition: width 0.15s, background 0.3s; background: var(--cyan); }
+  .area-display { margin-top: 8px; }
+  .area-nums { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+  .area-big { font-size: 18px; font-weight: 800; color: var(--text); }
+  .area-filt { font-size: 11px; color: var(--purple); }
+  .area-bar-wrap { background: var(--border); border-radius: 3px; height: 6px; overflow: hidden; }
+  .area-bar-fill { height: 100%; border-radius: 3px; transition: width 0.15s, background 0.3s; background: var(--accent); }
+
+  /* ── Alignment ── */
+  .dir-row { display: flex; align-items: center; gap: 10px; }
+  .dir-arrow { font-size: 26px; color: var(--muted); transition: color .12s, text-shadow .12s; line-height: 1; user-select: none; }
+  .dir-arrow.on { color: var(--orange); text-shadow: 0 0 14px rgba(255,157,61,.7); }
+  .dir-track { flex: 1; position: relative; height: 20px; background: var(--surface2); border: 1px solid var(--border-hi); border-radius: 4px; overflow: hidden; }
+  .dir-zone { position: absolute; inset-block: 0; left: 42.5%; width: 15%; background: rgba(46,232,137,.14); border-left: 1px solid rgba(46,232,137,.4); border-right: 1px solid rgba(46,232,137,.4); }
+  .dir-pip { position: absolute; inset-block: 3px; width: 5px; transform: translateX(-50%); background: var(--accent); border-radius: 2px; left: 50%; transition: left .1s linear, background .15s; box-shadow: 0 0 8px currentColor; }
+  .dir-pip.idle { background: var(--muted); box-shadow: none; }
   .dir-pip.warn { background: var(--orange); }
-  .dir-sub { margin-top: 5px; display: flex; justify-content: space-between; align-items: center; }
-  .dir-status { font-size: 9px; color: var(--muted); min-height: 12px; }
+  .dir-sub { margin-top: 8px; display: flex; justify-content: space-between; align-items: center; }
+  .dir-status { font-size: 11px; color: var(--muted); min-height: 14px; font-weight: 600; }
   .dir-status.ok   { color: var(--green); }
   .dir-status.warn { color: var(--orange); }
-  .dir-tag { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .dir-tag { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
 
-  /* ── Control mode panel ── */
-  .ctrl-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  /* ── Approach behavior (Settings) ── */
+  .ctrl-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
   .ctrl-row:last-child { border-bottom: none; }
-  .ctrl-label { font-size: 9px; color: var(--muted); }
-  .mode-toggle { display: flex; background: var(--surface2); border: 1px solid var(--border-hi); border-radius: 4px; overflow: hidden; }
-  .mode-btn { padding: 3px 10px; font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; color: var(--muted); background: none; border: none; font-family: inherit; transition: all .15s; }
-  .mode-btn.active-dist { background: var(--cyan); color: #042C53; }
-  .mode-btn.active-area { background: var(--accent); color: #fff; }
+  .ctrl-label { font-size: 11px; color: var(--muted); }
+  .mode-toggle { display: flex; background: var(--surface2); border: 1px solid var(--border-hi); border-radius: 5px; overflow: hidden; }
+  .mode-btn { padding: 5px 14px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; color: var(--muted); background: none; border: none; font-family: inherit; transition: all .15s; }
+  .mode-btn.active-dist { background: var(--cyan); color: #032430; }
+  .mode-btn.active-area { background: var(--accent-dim); color: #fff; }
   .mode-btn:hover:not(.active-dist):not(.active-area) { color: var(--text); }
-  .threshold-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; }
-  .threshold-label { font-size: 8px; color: var(--muted); text-transform: uppercase; width: 80px; flex-shrink: 0; }
-  .threshold-input { background: var(--surface2); border: 1px solid var(--border-hi); border-radius: 3px; color: var(--text); font-family: inherit; font-size: 10px; padding: 2px 5px; width: 60px; text-align: right; }
+  .threshold-input { background: var(--surface2); border: 1px solid var(--border-hi); border-radius: 4px; color: var(--text); font-family: inherit; font-size: 12px; padding: 4px 7px; width: 72px; text-align: right; }
   .threshold-input:focus { outline: none; border-color: var(--accent); }
-  .threshold-unit { font-size: 9px; color: var(--muted); }
-  .send-btn { background: var(--accent); color: #fff; border: none; border-radius: 3px; font-size: 9px; font-weight: 700; padding: 4px 10px; cursor: pointer; font-family: inherit; text-transform: uppercase; width: 100%; margin-top: 6px; }
-  .send-btn:hover { background: #2563eb; }
-  .ctrl-status { font-size: 9px; text-align: center; min-height: 14px; padding-top: 4px; color: var(--muted); }
-  .ctrl-status.ok  { color: var(--green); }
-  .ctrl-status.err { color: var(--red); }
-  .ctrl-divider { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; padding: 8px 0 3px; margin-top: 2px; border-top: 1px solid var(--border); }
+  .threshold-unit { font-size: 11px; color: var(--muted); }
+  .ctrl-divider { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; padding: 10px 0 4px; margin-top: 4px; border-top: 1px solid var(--border); }
 
-  /* ── Tune pane ── */
-  .tune-pane { padding: 10px 12px; }
-  .tune-group { margin-bottom: 14px; }
-  .tune-group-title { font-family: 'Syne', sans-serif; font-size: 9px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
-  .param-row { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
-  .param-row label { font-size: 9px; color: #888; width: 110px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .param-row input[type=range] { flex: 1; accent-color: var(--accent); height: 3px; cursor: pointer; }
-  .param-val { font-size: 10px; font-weight: 600; color: var(--text); width: 36px; text-align: right; flex-shrink: 0; }
-  .tune-actions { display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
-  .btn { flex: 1; padding: 6px 0; border: none; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; font-family: inherit; }
-  .btn-apply  { background: var(--accent); color: #fff; }
+  /* ── Settings pane ── */
+  .settings-pane { padding: 4px 0; }
+  .tune-group { margin-bottom: 4px; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+  .tune-group-title { font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .param-row { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+  .param-row label { font-size: 11px; color: #92a0c0; width: 150px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .param-row input[type=range] { flex: 1; accent-color: var(--accent); height: 4px; cursor: pointer; }
+  .param-val { font-size: 12px; font-weight: 700; color: var(--text); width: 52px; text-align: right; flex-shrink: 0; }
+  .tune-actions { display: flex; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .btn { flex: 1; padding: 9px 0; border: none; border-radius: 5px; font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; cursor: pointer; font-family: inherit; }
+  .btn-apply  { background: var(--accent-dim); color: #fff; }
   .btn-reset  { background: var(--surface2); color: var(--muted); border: 1px solid var(--border-hi); }
-  .btn-apply:hover { background: #2563eb; }
+  .btn-apply:hover { background: var(--accent); color: #04222c; }
   .btn-reset:hover { color: var(--text); }
-  .tune-status { font-size: 9px; color: var(--muted); margin-top: 6px; text-align: center; min-height: 14px; }
+  .tune-status { font-size: 11px; color: var(--muted); margin-top: 8px; text-align: center; min-height: 16px; }
   .tune-status.ok  { color: var(--green); }
   .tune-status.err { color: var(--red); }
-  .cfg-row { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
-  .cfg-name { background: var(--surface2); border: 1px solid var(--border-hi); border-radius: 3px; color: var(--accent); font-family: inherit; font-size: 9px; padding: 3px 5px; width: 72px; }
-  .cfg-ids  { background: var(--surface2); border: 1px solid var(--border-hi); border-radius: 3px; color: var(--text); font-family: inherit; font-size: 9px; padding: 3px 5px; flex: 1; }
+  .cfg-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .cfg-name { background: var(--surface2); border: 1px solid var(--border-hi); border-radius: 4px; color: var(--accent); font-family: inherit; font-size: 11px; padding: 4px 6px; width: 90px; }
+  .cfg-ids  { background: var(--surface2); border: 1px solid var(--border-hi); border-radius: 4px; color: var(--text); font-family: inherit; font-size: 11px; padding: 4px 6px; flex: 1; }
   .cfg-name:focus, .cfg-ids:focus { outline: none; border-color: var(--accent); }
-  .cfg-del   { background: none; border: 1px solid #7f1d1d; color: var(--red); border-radius: 3px; font-size: 9px; cursor: pointer; padding: 2px 5px; flex-shrink: 0; }
-  .cfg-del:hover { background: #1c0505; }
-  .cfg-block { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; margin-bottom: 6px; }
-  .cfg-label { font-size: 8px; color: var(--muted); text-transform: uppercase; width: 24px; flex-shrink: 0; }
-  .btn-add  { background: none; border: 1px dashed var(--border-hi); color: var(--muted); border-radius: 3px; font-size: 9px; cursor: pointer; padding: 4px 8px; margin-top: 2px; font-family: inherit; width: 100%; }
+  .cfg-del   { background: none; border: 1px solid #8a2028; color: var(--red); border-radius: 4px; font-size: 11px; cursor: pointer; padding: 3px 7px; flex-shrink: 0; }
+  .cfg-del:hover { background: #23070a; }
+  .cfg-block { background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; padding: 8px 10px; margin-bottom: 8px; }
+  .cfg-label { font-size: 9px; color: var(--muted); text-transform: uppercase; width: 30px; flex-shrink: 0; }
+  .btn-add  { background: none; border: 1px dashed var(--border-hi); color: var(--muted); border-radius: 4px; font-size: 11px; cursor: pointer; padding: 6px 10px; margin-top: 4px; font-family: inherit; width: 100%; }
   .btn-add:hover { border-color: var(--accent); color: var(--accent); }
-  .tab-content::-webkit-scrollbar { width: 3px; }
+  .cfg-dict { flex:1; background: var(--surface2); border: 1px solid var(--border-hi); border-radius: 4px; color: var(--accent); font-family: inherit; font-size: 11px; padding: 4px 6px; cursor: pointer; }
+  .tab-content::-webkit-scrollbar { width: 4px; }
   .tab-content::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
 </style>
 </head>
 <body>
 <div class="layout">
   <header>
-    <div class="logo">ArUco<span>.</span>System</div>
+    <div class="logo">XGO-mini2<span> </span>Dashboard</div>
     <div class="hsep"></div>
     <div class="conn-pill off" id="conn-pill"><div class="dot"></div><span id="conn-text">Disconnected</span></div>
+    <div class="domain-badge">DOMAIN <b id="domain-val">—</b></div>
     <div class="fps-badge">fps: <b id="fps-val">—</b></div>
     <div class="hsep"></div>
     <div class="batt-wrap" id="batt-wrap">
@@ -185,37 +186,31 @@
     </div>
   </header>
 
-  <div class="video-grid">
-    <div class="vpanel"><span class="vlabel l-hsv">HSV</span><img id="img-hsv" src="/stream/hsv" alt="hsv"></div>
-    <div class="vpanel"><span class="vlabel l-mask">Mask</span><img id="img-mask" src="/stream/mask" alt="mask"></div>
-    <div class="vpanel"><span class="vlabel l-roi">Camera + ROI</span><img id="img-raw" src="/stream/raw" alt="roi"></div>
-    <div class="vpanel"><span class="vlabel l-zoomed">Zoomed ROI</span><img id="img-zoomed" src="/stream/zoomed" alt="zoomed"></div>
+  <div class="video-wrap">
+    <span class="vlabel"><span class="dot">●</span>LIVE</span>
+    <img id="img-raw" src="/stream/raw" alt="camera feed">
   </div>
 
   <aside>
     <div class="tabs">
       <div class="tab active" onclick="switchTab('status')">Status</div>
-      <div class="tab" onclick="switchTab('tune')">Tune</div>
+      <div class="tab" onclick="switchTab('settings')">Settings</div>
     </div>
     <div class="tab-content">
 
       <!-- STATUS TAB -->
       <div class="tab-pane active" id="tab-status">
 
-        <div class="batt-banner" id="batt-banner">⚠ Battery low — charge immediately</div>
-
         <div class="sec">
           <div class="sec-title">Robot State</div>
           <div class="state-badge s-UNKNOWN" id="state-badge">UNKNOWN</div>
         </div>
 
-        <!-- ── Alignment / Direction indicator ── -->
         <div class="sec">
           <div class="sec-title">Alignment</div>
           <div class="dir-row">
             <span class="dir-arrow" id="dir-left">◀</span>
             <div class="dir-track">
-              <!-- green zone: ±cx_threshold (0.15) around centre -->
               <div class="dir-zone"></div>
               <div class="dir-pip idle" id="dir-pip"></div>
             </div>
@@ -227,56 +222,6 @@
           </div>
         </div>
 
-        <!-- ── Approach Mode Control ── -->
-        <div class="sec">
-          <div class="sec-title">Approach Mode</div>
-          <div class="ctrl-row">
-            <span class="ctrl-label">Target (cube)</span>
-            <div class="mode-toggle">
-              <button class="mode-btn" id="btn-t-dist" onclick="setMode('target','distance')">Dist</button>
-              <button class="mode-btn" id="btn-t-area" onclick="setMode('target','area')">Area</button>
-            </div>
-          </div>
-          <div class="ctrl-row" id="row-grasp-dist">
-            <span class="ctrl-label">Grasp at</span>
-            <div style="display:flex;align-items:center;gap:4px">
-              <input class="threshold-input" id="inp-grasp-dist" type="number" step="0.01" min="0.05" max="1.0" value="0.20" oninput="freezeMode()">
-              <span class="threshold-unit">m</span>
-            </div>
-          </div>
-          <div class="ctrl-row">
-            <span class="ctrl-label">Trailer (container)</span>
-            <div class="mode-toggle">
-              <button class="mode-btn" id="btn-tr-dist" onclick="setMode('trailer','distance')">Dist</button>
-              <button class="mode-btn" id="btn-tr-area" onclick="setMode('trailer','area')">Area</button>
-            </div>
-          </div>
-          <div class="ctrl-row" id="row-deploy-dist">
-            <span class="ctrl-label">Deploy at</span>
-            <div style="display:flex;align-items:center;gap:4px">
-              <input class="threshold-input" id="inp-deploy-dist" type="number" step="0.01" min="0.05" max="1.0" value="0.25" oninput="freezeMode()">
-              <span class="threshold-unit">m</span>
-            </div>
-          </div>
-          <!-- ── Distance approach controller ── -->
-          <div class="ctrl-divider">Distance Approach</div>
-          <div class="ctrl-row">
-            <span class="ctrl-label" title="Schrittlänge = remaining * gain. Kalibrierung: ~1 / Robotergeschwindigkeit [m/s]">Dist gain (s/m)</span>
-            <input class="threshold-input" id="inp-dist-gain" type="number" step="0.5" min="1" max="30" value="8.0" oninput="freezeMode()">
-          </div>
-          <div class="ctrl-row">
-            <span class="ctrl-label">Step min (s)</span>
-            <input class="threshold-input" id="inp-step-min" type="number" step="0.05" min="0.1" max="2.0" value="0.30" oninput="freezeMode()">
-          </div>
-          <div class="ctrl-row">
-            <span class="ctrl-label">Step max (s)</span>
-            <input class="threshold-input" id="inp-step-max" type="number" step="0.1" min="0.5" max="5.0" value="2.0" oninput="freezeMode()">
-          </div>
-          <button class="send-btn" onclick="sendControl()">Apply</button>
-          <div class="ctrl-status" id="ctrl-status"></div>
-        </div>
-
-        <!-- ── Target ── -->
         <div class="sec">
           <div class="sec-title">Target</div>
           <div class="det miss" id="target-card">
@@ -303,11 +248,10 @@
           </div>
         </div>
 
-        <!-- ── Trailer ── -->
         <div class="sec">
           <div class="sec-title">Trailer</div>
           <div class="det miss" id="trailer-card">
-            <div class="det-hdr"><div class="ind"></div><span class="det-lbl">Trailer</span><span class="det-nm" id="tr-name">—</span><span id="tr-far-badge" style="display:none;margin-left:4px;font-size:8px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:1px 5px;border-radius:3px;background:rgba(255,200,0,.15);color:#ffc800;border:1px solid rgba(255,200,0,.35);">far</span></div>
+            <div class="det-hdr"><div class="ind"></div><span class="det-lbl">Trailer</span><span class="det-nm" id="tr-name">—</span><span id="tr-far-badge" style="display:none;margin-left:5px;font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:rgba(255,200,0,.15);color:#ffc800;border:1px solid rgba(255,200,0,.35);">far</span></div>
             <div class="det-grid">
               <div><div class="dk">cx</div><div class="dv" id="tr-cx">—</div></div>
               <div><div class="dk">cy</div><div class="dv" id="tr-cy">—</div></div>
@@ -330,20 +274,62 @@
           </div>
         </div>
 
-        <div class="sec">
-          <div class="sec-title">System</div>
-          <div class="stat"><span class="sk">ROI source</span><span class="sv" id="roi-src">—</span></div>
-          <div class="stat"><span class="sk">Det fps</span><span class="sv" id="det-fps">—</span></div>
-          <div class="stat"><span class="sk">Update</span><span class="sv" id="last-upd">—</span></div>
-        </div>
-
       </div>
 
-      <!-- TUNE TAB -->
-      <div class="tab-pane" id="tab-tune">
-        <div class="tune-pane" id="tune-pane">
-          <div style="font-size:10px;color:var(--muted);padding:20px 0;text-align:center">Waiting for detector params...</div>
+      <!-- SETTINGS TAB -->
+      <div class="tab-pane" id="tab-settings">
+
+        <!-- Approach behavior — still actively used by fsm_node -->
+        <div class="sec">
+          <div class="sec-title">Approach Behavior</div>
+          <div class="ctrl-row">
+            <span class="ctrl-label">Target (cube)</span>
+            <div class="mode-toggle">
+              <button class="mode-btn" id="btn-t-dist" onclick="setMode('target','distance')">Dist</button>
+              <button class="mode-btn" id="btn-t-area" onclick="setMode('target','area')">Area</button>
+            </div>
+          </div>
+          <div class="ctrl-row" id="row-grasp-dist">
+            <span class="ctrl-label">Grasp at</span>
+            <div style="display:flex;align-items:center;gap:5px">
+              <input class="threshold-input" id="inp-grasp-dist" type="number" step="0.01" min="0.05" max="1.0" value="0.20" oninput="freezeMode()">
+              <span class="threshold-unit">m</span>
+            </div>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-label">Trailer (container)</span>
+            <div class="mode-toggle">
+              <button class="mode-btn" id="btn-tr-dist" onclick="setMode('trailer','distance')">Dist</button>
+              <button class="mode-btn" id="btn-tr-area" onclick="setMode('trailer','area')">Area</button>
+            </div>
+          </div>
+          <div class="ctrl-row" id="row-deploy-dist">
+            <span class="ctrl-label">Deploy at</span>
+            <div style="display:flex;align-items:center;gap:5px">
+              <input class="threshold-input" id="inp-deploy-dist" type="number" step="0.01" min="0.05" max="1.0" value="0.25" oninput="freezeMode()">
+              <span class="threshold-unit">m</span>
+            </div>
+          </div>
+          <div class="ctrl-divider">Distance Approach</div>
+          <div class="ctrl-row">
+            <span class="ctrl-label" title="Schrittlänge = remaining * gain">Dist gain (s/m)</span>
+            <input class="threshold-input" id="inp-dist-gain" type="number" step="0.5" min="1" max="30" value="8.0" oninput="freezeMode()">
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-label">Step min (s)</span>
+            <input class="threshold-input" id="inp-step-min" type="number" step="0.05" min="0.1" max="2.0" value="0.30" oninput="freezeMode()">
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-label">Step max (s)</span>
+            <input class="threshold-input" id="inp-step-max" type="number" step="0.1" min="0.5" max="5.0" value="2.0" oninput="freezeMode()">
+          </div>
         </div>
+
+        <!-- Filtering / calibration / marker sizes + marker config, built dynamically -->
+        <div class="settings-pane" id="settings-pane">
+          <div style="font-size:11px;color:var(--muted);padding:20px 18px;text-align:center">Loading settings...</div>
+        </div>
+
       </div>
 
     </div>
@@ -357,13 +343,10 @@ function watchStream(id, url) {
   document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') reconnect(); });
   img.addEventListener('error', function(){ setTimeout(reconnect, 1000); });
 }
-watchStream('img-hsv',    '/stream/hsv');
-watchStream('img-mask',   '/stream/mask');
-watchStream('img-raw',    '/stream/raw');
-watchStream('img-zoomed', '/stream/zoomed');
+watchStream('img-raw', '/stream/raw');
 
 // IDs of far/large trailer markers — loaded at startup so poll() can show
-// the "far" badge without waiting for the Tune tab to be opened.
+// the "far" badge without waiting for the Settings tab to be opened.
 var trailerFarIds = new Set();
 function _loadTrailerFarIds(trailers) {
   trailerFarIds.clear();
@@ -371,15 +354,14 @@ function _loadTrailerFarIds(trailers) {
     (e.far_ids || []).forEach(function(id) { trailerFarIds.add(parseInt(id)); });
   });
 }
-// Fetch on startup from /api/config (fast, no detector needed)
 fetch('/api/config').then(function(r){ return r.json(); })
   .then(function(cfg){ _loadTrailerFarIds(cfg.trailers); })
   .catch(function(){});
 
 function switchTab(name) {
-  document.querySelectorAll('.tab').forEach(function(t,i){ t.classList.toggle('active', ['status','tune'][i]===name); });
+  document.querySelectorAll('.tab').forEach(function(t,i){ t.classList.toggle('active', ['status','settings'][i]===name); });
   document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.toggle('active', p.id==='tab-'+name); });
-  if (name==='tune' && !tuneLoaded) loadConfig();
+  if (name==='settings' && !settingsLoaded) loadSettings();
 }
 
 // ── Approach Mode Control ─────────────────────────────────────────
@@ -444,7 +426,6 @@ function setMode(which, mode) {
 }
 
 function sendControl() {
-  var status = document.getElementById('ctrl-status');
   var gd   = parseFloat(document.getElementById('inp-grasp-dist').value);
   var dd   = parseFloat(document.getElementById('inp-deploy-dist').value);
   var dg   = parseFloat(document.getElementById('inp-dist-gain').value);
@@ -467,22 +448,19 @@ function sendControl() {
   };
   modePending++;
   clearTimeout(modePendingTimer);
-  fetch('/api/fsm_control', {
+  return fetch('/api/fsm_control', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(payload)
   })
   .then(function(r){ return r.json(); })
   .then(function(d){
-    status.textContent = d.ok ? 'Applied' : 'Error';
-    status.className = 'ctrl-status ' + (d.ok ? 'ok' : 'err');
-    setTimeout(function(){ status.textContent=''; status.className='ctrl-status'; }, 2000);
     modePendingTimer = setTimeout(function(){ modePending = 0; }, 2000);
+    return !!(d && d.ok);
   })
   .catch(function(){
-    status.textContent = 'Request failed';
-    status.className = 'ctrl-status err';
     modePending = 0;
+    return false;
   });
 }
 
@@ -512,13 +490,6 @@ function updateDistBar(valId, unitId, barId, distM, threshM) {
 }
 
 // ── Direction / alignment indicator ──────────────────────────────
-// Mirrors the FSM alignment logic:
-//   cx_error = (last_cx - 960) / 960   (image width = 1920)
-//   |cx_error| > cx_threshold (0.15) → robot turns/strafes in that direction
-//
-// Arrow direction = direction the ROBOT will move to re-centre the marker.
-//   marker to the right (cx > 960) → robot needs to go RIGHT  → right arrow on
-//   marker to the left  (cx < 960) → robot needs to go LEFT   → left arrow on
 var DIR_IMG_W   = 1920;
 var DIR_CX_HALF = 960;
 var DIR_THRESH  = 0.15;   // must match FSM cx_threshold
@@ -530,7 +501,6 @@ function updateDirection(s) {
   var dst = document.getElementById('dir-status');
   var tag = document.getElementById('dir-tag');
 
-  // Pick whichever marker is currently tracked
   var cx_val   = null;
   var tracking = '';
   if (s.target_found) {
@@ -542,21 +512,18 @@ function updateDirection(s) {
   }
 
   if (cx_val !== null && cx_val !== undefined) {
-    // Position the pip (0–100 % of track width)
     var pct = Math.max(0, Math.min(100, cx_val / DIR_IMG_W * 100));
     pip.style.left = pct.toFixed(1) + '%';
 
-    var err = (cx_val - DIR_CX_HALF) / DIR_CX_HALF;  // −1 … +1
+    var err = (cx_val - DIR_CX_HALF) / DIR_CX_HALF;
 
     if (Math.abs(err) > DIR_THRESH) {
       pip.className = 'dir-pip warn';
       if (err > 0) {
-        // Marker is to the right → robot goes right
         rgt.className = 'dir-arrow on';
         lft.className = 'dir-arrow';
         dst.textContent  = '→ strafe right';
       } else {
-        // Marker is to the left → robot goes left
         lft.className = 'dir-arrow on';
         rgt.className = 'dir-arrow';
         dst.textContent  = '← strafe left';
@@ -571,7 +538,6 @@ function updateDirection(s) {
     }
     tag.textContent = tracking;
   } else {
-    // Nothing tracked
     pip.style.left  = '50%';
     pip.className   = 'dir-pip idle';
     lft.className   = 'dir-arrow';
@@ -600,21 +566,18 @@ function poll() {
   fetch('/api/state')
   .then(function(r){ return r.json(); })
   .then(function(s){
-    // Connection
     var pill = document.getElementById('conn-pill');
     pill.className = 'conn-pill ' + (s.connected ? 'on' : 'off');
     document.getElementById('conn-text').textContent = s.connected ? 'Connected' : 'Disconnected';
     document.getElementById('fps-val').textContent  = fv(s.fps, 1);
-    document.getElementById('det-fps').textContent  = fv(s.fps, 1);
+    document.getElementById('domain-val').textContent = (s.ros_domain_id != null) ? s.ros_domain_id : '—';
 
-    // State badge
     var raw = s.robot_state;
     var sc  = (raw && VALID_STATES[raw]) ? raw : 'UNKNOWN';
     var badge = document.getElementById('state-badge');
     badge.className   = 'state-badge s-' + sc;
     badge.textContent = sc;
 
-    // Sync mode UI from FSM
     if (modePending === 0) {
       if (s.use_distance_target  != null) modeState.use_distance_target  = s.use_distance_target;
       if (s.use_distance_trailer != null) modeState.use_distance_trailer = s.use_distance_trailer;
@@ -626,13 +589,12 @@ function poll() {
     }
     updateModeUI();
 
-    // Battery indicator
+    // Battery indicator (header only)
     (function() {
       var batt   = (s.battery != null) ? s.battery : -1;
       var wrap   = document.getElementById('batt-wrap');
       var fill   = document.getElementById('batt-fill');
       var pct    = document.getElementById('batt-pct');
-      var banner = document.getElementById('batt-banner');
       if (batt >= 0) {
         var p = Math.round(Math.max(0, Math.min(100, batt)));
         fill.style.width = p + '%';
@@ -641,24 +603,20 @@ function poll() {
           fill.style.background = 'var(--red)';
           pct.style.color       = 'var(--red)';
           wrap.className        = 'batt-wrap crit';
-          banner.style.display  = 'block';
         } else if (p <= 50) {
           fill.style.background = 'var(--yellow)';
           pct.style.color       = 'var(--yellow)';
           wrap.className        = 'batt-wrap warn';
-          banner.style.display  = 'none';
         } else {
           fill.style.background = 'var(--green)';
           pct.style.color       = 'var(--green)';
           wrap.className        = 'batt-wrap ok';
-          banner.style.display  = 'none';
         }
       } else {
         fill.style.width = '0%';
         pct.textContent  = '—';
         pct.style.color  = 'var(--muted)';
         wrap.className   = 'batt-wrap';
-        banner.style.display = 'none';
       }
     })();
 
@@ -699,14 +657,7 @@ function poll() {
       s.trailer_distance != null ? s.trailer_distance : -1,
       modeState.use_distance_trailer ? modeState.deploy_distance_m : -1);
 
-    // System
-    var roiEl = document.getElementById('roi-src');
-    roiEl.textContent = s.roi_source || 'none';
-    roiEl.className   = 'sv ' + (s.roi_source==='marker' ? 'ok' : s.roi_source==='mask' ? 'warn' : 'err');
-    var age   = Math.round(Date.now()/1000 - s.last_update);
-    var ageEl = document.getElementById('last-upd');
-    ageEl.textContent = age + 's ago';
-    ageEl.className   = 'sv ' + (age<2 ? 'ok' : age<5 ? 'warn' : 'err');
+    updateDirection(s);
   })
   .catch(function(){
     document.getElementById('conn-pill').className = 'conn-pill off';
@@ -718,66 +669,56 @@ setInterval(poll, 300);
 poll();
 updateModeUI();
 
-// ── Tune Tab ──────────────────────────────────────────────────────
+// ── Settings tab: only what the robot still actually uses ──────────
 var PARAM_DEFS = [
-  { group: "ROI / Zoom", params: [
-    { key: "roi_scale",     label: "ROI zoom scale",    min:1,   max:8,    step:0.5,  type:"float" },
-    { key: "min_cube_area", label: "Min cube area px2", min:50,  max:5000, step:50,   type:"float" },
-  ]},
-  { group: "Green Floor Exclusion", params: [
-    { key: "floor_h_low",  label: "H low",  min:0, max:179, step:1, type:"int" },
-    { key: "floor_h_high", label: "H high", min:0, max:179, step:1, type:"int" },
-    { key: "floor_s_low",  label: "S low",  min:0, max:255, step:1, type:"int" },
-    { key: "floor_s_high", label: "S high", min:0, max:255, step:1, type:"int" },
-    { key: "floor_v_low",  label: "V low",  min:0, max:255, step:1, type:"int" },
-    { key: "floor_v_high", label: "V high", min:0, max:255, step:1, type:"int" },
-  ]},
-  { group: "White Wall Exclusion", params: [
-    { key: "white_v_thresh", label: "V threshold", min:100, max:255, step:1,    type:"int" },
-    { key: "white_s_thresh", label: "S threshold", min:0,   max:100, step:1,    type:"int" },
-  ]},
-  { group: "Dark Cube Detection", params: [
-    { key: "dark_v_thresh", label: "V dark threshold", min:20,  max:200, step:5,    type:"int" },
-    { key: "dark_fill_min", label: "Min dark fill",    min:0,   max:0.5, step:0.01, type:"float" },
-  ]},
-  { group: "EMA Filter", params: [
-    { key: "filter_alpha", label: "Alpha (0=frozen 1=raw)", min:0.01, max:1.0, step:0.01, type:"float" },
-  ]},
-  { group: "Persistence", params: [
-    { key: "persist_ttl", label: "Hold duration (s)", min:0.1, max:3.0, step:0.1, type:"float" },
+  { group: "Detection Filtering", params: [
+    { key: "filter_alpha", label: "EMA Alpha", min:0.01, max:1.0, step:0.01, type:"float" },
+    { key: "persist_ttl",  label: "Persist TTL (s)", min:0.1, max:3.0, step:0.1, type:"float" },
   ]},
 ];
+
+function decimalsForStep(step) {
+  if (step >= 1)    return 0;
+  if (step >= 0.1)  return 1;
+  if (step >= 0.01) return 2;
+  return 3;
+}
 
 var currentParams = {}; var sliderValues = {};
 var editTargets = {}; var editTrailers = {};
 
-function buildTuneUI(params) {
-  currentParams = params; sliderValues = Object.assign({}, params);
+function buildSettingsUI(params) {
+  currentParams = params; sliderValues = {};
+  PARAM_DEFS.forEach(function(group) {
+    group.params.forEach(function(def) {
+      sliderValues[def.key] = params[def.key] != null ? params[def.key] : def.min;
+    });
+  });
   editTargets  = JSON.parse(JSON.stringify(params.targets  || {}));
   editTrailers = JSON.parse(JSON.stringify(params.trailers || {}));
-  var pane = document.getElementById('tune-pane'); var html = '';
+  var pane = document.getElementById('settings-pane'); var html = '';
   PARAM_DEFS.forEach(function(group) {
     html += '<div class="tune-group"><div class="tune-group-title">'+group.group+'</div>';
     group.params.forEach(function(def) {
       var val  = params[def.key] != null ? params[def.key] : def.min;
-      var disp = def.type==='float' ? parseFloat(val).toFixed(def.step<0.1?2:1) : parseInt(val);
+      var disp = def.type==='float' ? parseFloat(val).toFixed(decimalsForStep(def.step)) : parseInt(val);
       html += '<div class="param-row"><label title="'+def.key+'">'+def.label+'</label>'
             + '<input type="range" id="sl_'+def.key+'" min="'+def.min+'" max="'+def.max+'" step="'+def.step+'" value="'+val+'"'
-            + ' oninput="onSlider(\''+def.key+'\',\''+def.type+'\',this.value)">'
+            + ' oninput="onSlider(\''+def.key+'\',\''+def.type+'\','+def.step+',this.value)">'
             + '<span class="param-val" id="pv_'+def.key+'">'+disp+'</span></div>';
     });
     html += '</div>';
   });
-  html += '<div class="tune-group"><div class="tune-group-title">ArUco Config - Targets</div>'
+  html += '<div class="tune-group"><div class="tune-group-title">Marker Config — Targets</div>'
         + '<div id="cfg-targets">'+renderConfigEntries(editTargets,'target')+'</div>'
-        + '<button class="btn btn-add" onclick="addConfigEntry(\'target\')">+ Add Target</button></div>';
-  html += '<div class="tune-group"><div class="tune-group-title">ArUco Config - Trailers</div>'
+        + '<button class="btn-add" onclick="addConfigEntry(\'target\')">+ Add Target</button></div>';
+  html += '<div class="tune-group"><div class="tune-group-title">Marker Config — Trailers</div>'
         + '<div id="cfg-trailers">'+renderConfigEntries(editTrailers,'trailer')+'</div>'
-        + '<button class="btn btn-add" onclick="addConfigEntry(\'trailer\')">+ Add Trailer</button></div>';
-  html += '<div class="tune-actions">'
-        + '<button class="btn btn-reset" onclick="resetParams()">Reset</button>'
-        + '<button class="btn btn-apply" onclick="applyParams()">Apply All</button></div>'
-        + '<div class="tune-status" id="tune-status"></div>';
+        + '<button class="btn-add" onclick="addConfigEntry(\'trailer\')">+ Add Trailer</button>'
+        + '<div class="tune-actions">'
+        + '<button class="btn btn-reset" onclick="resetSettings()">Reset</button>'
+        + '<button class="btn btn-apply" onclick="applySettings()">Apply All</button></div>'
+        + '<div class="tune-status" id="tune-status"></div></div>';
   pane.innerHTML = html;
 }
 
@@ -794,40 +735,33 @@ function renderConfigEntries(dict, kind) {
     var opts = DICT_OPTIONS.map(function(d){ return '<option value="'+d+'" '+(d===dictVal?'selected':'')+'>'+d+'</option>'; }).join('');
 
     html += '<div class="cfg-block">';
-    // Name + delete
     html += '<div class="cfg-row">'
           + '<input class="cfg-name" value="'+name+'" onchange="renameConfigEntry(\''+kind+'\',\''+name+'\',this.value)">'
           + '<button class="cfg-del" onclick="removeConfigEntry(\''+kind+'\',\''+name+'\')">&#x2715;</button></div>';
-    // Primary IDs
     html += '<div class="cfg-row"><span class="cfg-label">IDs</span>'
           + '<input class="cfg-ids" value="'+ids.join(', ')+'" onchange="updateConfigField(\''+kind+'\',\''+name+'\',\'ids\',this.value)"></div>';
-    // Dict
     html += '<div class="cfg-row"><span class="cfg-label">Dict</span>'
-          + '<select class="cfg-dict" onchange="updateConfigField(\''+kind+'\',\''+name+'\',\'dict\',this.value)"'
-          + ' style="flex:1;background:var(--surface2);border:1px solid var(--border-hi);border-radius:3px;color:var(--accent);font-family:inherit;font-size:9px;padding:2px 4px;cursor:pointer;">'
+          + '<select class="cfg-dict" onchange="updateConfigField(\''+kind+'\',\''+name+'\',\'dict\',this.value)">'
           + opts + '</select></div>';
-    // Marker size
     html += '<div class="cfg-row"><span class="cfg-label">Size m</span>'
           + '<input class="cfg-ids" type="number" step="0.001" min="0.001" max="1.0" placeholder="global" value="'+msize+'"'
           + ' onchange="updateConfigField(\''+kind+'\',\''+name+'\',\'marker_size_m\',this.value)"'
           + ' style="flex:1;text-align:right;"></div>';
 
-    // ── Far marker section (trailers only) ───────────────────────────
     if (kind === 'trailer') {
       var farIds  = (typeof entry === 'object' && entry.far_ids)  ? entry.far_ids  : [];
       var farDict = (typeof entry === 'object' && entry.far_dict) ? entry.far_dict : '4x4_50';
       var farSize = (typeof entry === 'object' && entry.far_marker_size_m != null) ? entry.far_marker_size_m : '';
       var farOpts = DICT_OPTIONS.map(function(d){ return '<option value="'+d+'" '+(d===farDict?'selected':'')+'>'+d+'</option>'; }).join('');
 
-      html += '<div style="font-size:8px;color:var(--muted);text-transform:uppercase;'
-            + 'letter-spacing:.09em;padding:5px 0 2px;margin-top:2px;border-top:1px dashed var(--border);">'
+      html += '<div style="font-size:9px;color:var(--muted);text-transform:uppercase;'
+            + 'letter-spacing:.09em;padding:6px 0 3px;margin-top:3px;border-top:1px dashed var(--border);">'
             + 'Far marker (optional fallback)</div>';
       html += '<div class="cfg-row"><span class="cfg-label">IDs</span>'
             + '<input class="cfg-ids" value="'+farIds.join(', ')+'" placeholder="none — leave empty to disable"'
             + ' onchange="updateConfigField(\''+kind+'\',\''+name+'\',\'far_ids\',this.value)"></div>';
       html += '<div class="cfg-row"><span class="cfg-label">Dict</span>'
-            + '<select class="cfg-dict" onchange="updateConfigField(\''+kind+'\',\''+name+'\',\'far_dict\',this.value)"'
-            + ' style="flex:1;background:var(--surface2);border:1px solid var(--border-hi);border-radius:3px;color:var(--accent);font-family:inherit;font-size:9px;padding:2px 4px;cursor:pointer;">'
+            + '<select class="cfg-dict" onchange="updateConfigField(\''+kind+'\',\''+name+'\',\'far_dict\',this.value)">'
             + farOpts + '</select></div>';
       html += '<div class="cfg-row"><span class="cfg-label">Size m</span>'
             + '<input class="cfg-ids" type="number" step="0.001" min="0.001" max="1.0" placeholder="required" value="'+farSize+'"'
@@ -837,7 +771,7 @@ function renderConfigEntries(dict, kind) {
 
     html += '</div>';
   });
-  return html || '<div style="font-size:9px;color:var(--muted);padding:4px 0">No entries</div>';
+  return html || '<div style="font-size:11px;color:var(--muted);padding:6px 0">No entries</div>';
 }
 
 function refreshConfigSection(kind) {
@@ -868,37 +802,40 @@ function updateConfigField(kind,name,field,raw) {
     d[name][field]=raw.trim();
   }
 }
-function onSlider(key,type,raw) {
+function onSlider(key,type,step,raw) {
   var val=type==='float'?parseFloat(raw):parseInt(raw); sliderValues[key]=val;
-  document.getElementById('pv_'+key).textContent=type==='float'?val.toFixed(parseFloat(raw)<0.1?2:1):val;
+  document.getElementById('pv_'+key).textContent=type==='float'?val.toFixed(decimalsForStep(step)):val;
 }
-function applyParams() {
+function applySettings() {
   var status=document.getElementById('tune-status');
-  fetch('/api/params',{method:'POST',headers:{'Content-Type':'application/json'},
+  var paramsReq = fetch('/api/params',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify(Object.assign({},sliderValues,{targets:editTargets,trailers:editTrailers}))})
-  .then(function(r){return r.json();})
-  .then(function(d){
-    status.textContent=d.ok?'Applied':'Error'; status.className='tune-status '+(d.ok?'ok':'err');
-    setTimeout(function(){status.textContent='';status.className='tune-status';},2000);
-  }).catch(function(){status.textContent='Failed';status.className='tune-status err';});
-}
-function resetParams(){ tuneLoaded=false; loadConfig(); }
+    .then(function(r){return r.json();})
+    .then(function(d){ return !!(d && d.ok); })
+    .catch(function(){ return false; });
+  var controlReq = sendControl();
 
-var tuneLoaded=false;
-function loadConfig() {
+  Promise.all([paramsReq, controlReq]).then(function(results){
+    var ok = results[0] && results[1];
+    status.textContent = ok ? 'Applied' : 'Error';
+    status.className = 'tune-status ' + (ok ? 'ok' : 'err');
+    setTimeout(function(){status.textContent='';status.className='tune-status';},2000);
+  });
+}
+function resetSettings(){ settingsLoaded=false; loadSettings(); }
+
+var settingsLoaded=false;
+function loadSettings() {
   Promise.all([fetch('/api/config'),fetch('/api/params')])
   .then(function(rs){return Promise.all(rs.map(function(r){return r.json();}));})
   .then(function(ds){
     var cfg=ds[0]; var p=ds[1]||{};
-    // Prefer live detector state from /api/params (has all fields including
-    // marker_size_m, far_ids etc); fall back to /api/config only when params
-    // haven't been published yet (empty targets/trailers).
     if (!p.targets  || Object.keys(p.targets).length  === 0) p.targets  = cfg.targets  || {};
     if (!p.trailers || Object.keys(p.trailers).length === 0) p.trailers = cfg.trailers || {};
-    _loadTrailerFarIds(p.trailers);   // keep badge set in sync with live state
-    buildTuneUI(p); tuneLoaded=true;
+    _loadTrailerFarIds(p.trailers);
+    buildSettingsUI(p); settingsLoaded=true;
   }).catch(function(e){
-    document.getElementById('tune-pane').innerHTML='<div style="padding:16px;color:var(--red);font-size:10px">Config load failed: '+e+'</div>';
+    document.getElementById('settings-pane').innerHTML='<div style="padding:18px;color:var(--red);font-size:11px">Settings load failed: '+e+'</div>';
   });
 }
 </script>
