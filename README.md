@@ -55,7 +55,7 @@ aruco_laptop/
 ├── config/
 │   └── aruco_config.yaml       # same format as the robot's config
 └── templates/
-    └── dashboard.html          # the actual web UI — not included here
+    └── dashboard.html          # the actual web UI
 ```
 
 Node executable (as referenced by the launch file): `dashboard_node`.
