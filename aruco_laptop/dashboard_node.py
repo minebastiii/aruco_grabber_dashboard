@@ -13,6 +13,14 @@ Still supports settings pushed from the UI:
     marker sizes, target/trailer config) -> forwarded to camera/params
     on the robot.
   - FSM approach-mode / thresholds -> fsm/control on the robot.
+
+ID lock support:
+  - aruco/markers (camera_node): list of all visible markers; every one
+    is drawn, the locked target / trailer highlighted with "LOCK".
+  - fsm/control_mode (fsm_node): locked_target_id, locked_trailer,
+    searching_container, lock_timeout_s — shown in an info panel in the
+    image and returned by /api/state.
+  - POST /api/release_lock releases the FSM lock.
 """
 
 import json
@@ -112,6 +120,29 @@ ROBOT_PARAM_KEYS = {
     "target_marker_size_m", "trailer_marker_size_m",
 }
 
+# Keys mirrored from fsm/control_mode into the dashboard state.
+CONTROL_MODE_KEYS = (
+    "use_distance_target", "use_distance_trailer",
+    "grasp_distance_m", "deploy_distance_m",
+    "approach_dist_gain", "approach_step_min", "approach_step_max",
+    "lock_timeout_s", "locked_target_id", "locked_trailer", "searching_container",
+)
+
+# Keys the UI may set via /api/fsm_control (lock state is FSM-owned).
+FSM_SETTABLE_KEYS = (
+    "use_distance_target", "use_distance_trailer",
+    "grasp_distance_m", "deploy_distance_m",
+    "approach_dist_gain", "approach_step_min", "approach_step_max",
+    "lock_timeout_s",
+)
+
+# Overlay colours (BGR)
+COL_TARGET  = (0, 220, 80)
+COL_TRAILER = (0, 100, 255)
+COL_FAR     = (255, 200, 0)
+COL_LOCK    = (255, 0, 255)
+COL_TEXT    = (255, 255, 255)
+
 
 class DashboardNode(Node):
     def __init__(self):
@@ -148,7 +179,16 @@ class DashboardNode(Node):
             "approach_step_min":    0.3,
             "approach_step_max":    2.0,
             "battery":              -1.0,
+            # ID lock (from fsm/control_mode)
+            "locked_target_id":     None,
+            "locked_trailer":       None,
+            "searching_container":  False,
+            "lock_timeout_s":       0.0,
+            # Full marker list (from aruco/markers)
+            "markers":              [],
+            "markers_age_s":        -1.0,
         }
+        self._markers_rx = 0.0
         # Last "camera/params/current" payload from the robot
         # (filter_alpha, persist_ttl, targets, trailers, cam_*, marker
         # sizes, dict_names) — this is exactly what the Settings tab shows.
@@ -169,6 +209,7 @@ class DashboardNode(Node):
             (String,            "aruco/trailer/name",          self._cb_trailer_name),
             (Float32MultiArray, "aruco/trailer/data_filtered", self._cb_trailer_filt),
             (Float32,           "aruco/trailer/distance",      self._cb_trailer_dist),
+            (String,            "aruco/markers",               self._cb_markers),
             (String,            "robot/state",                 self._cb_robot_state),
             (String,            "fsm/control_mode",            self._cb_control_mode),
             (String,            "camera/params/current",       self._cb_params_current),
@@ -211,13 +252,20 @@ class DashboardNode(Node):
         try:
             d = json.loads(m.data)
             with self._state_lock:
-                for k in ("use_distance_target", "use_distance_trailer",
-                          "grasp_distance_m", "deploy_distance_m",
-                          "approach_dist_gain", "approach_step_min", "approach_step_max"):
+                for k in CONTROL_MODE_KEYS:
                     if k in d:
                         self.state[k] = d[k]
         except Exception:
             pass
+
+    def _cb_markers(self, m):
+        try:
+            d = json.loads(m.data)
+        except Exception:
+            return
+        with self._state_lock:
+            self.state["markers"] = d.get("markers", [])
+        self._markers_rx = time.time()
 
     def _cb_target_filt(self, m):
         d = list(m.data)
@@ -382,35 +430,84 @@ class DashboardNode(Node):
                 cv2.circle(vis, (int(cx), int(cy)), 6, col, -1)
                 cv2.putText(vis, label, (int(cx) + 8, int(cy)), cv2.FONT_HERSHEY_SIMPLEX, 0.4, col, 1)
 
-        # FSM-effective target/trailer position (as actually used by
-        # fsm_node, incl. persistence — taken from the robot's topics).
+        # Markers as the robot sees them (aruco/markers, incl. persistence),
+        # with the FSM's locked target / trailer highlighted.
         with self._state_lock:
             s = dict(self.state)
-        if s["target_found"]:
-            cv2.circle(vis, (int(s["target_cx"]), int(s["target_cy"])), 14, (0, 255, 80), 2)
-            if s["target_distance"] > 0:
-                cv2.putText(vis, f'{s["target_distance"] * 100:.1f}cm',
-                            (int(s["target_cx"]) + 16, int(s["target_cy"]) - 12),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 80), 2)
-            fx2, fy2, r = int(s["target_cx_f"]), int(s["target_cy_f"]), 10
-            cv2.line(vis, (fx2 - r, fy2), (fx2 + r, fy2), (200, 80, 255), 2)
-            cv2.line(vis, (fx2, fy2 - r), (fx2, fy2 + r), (200, 80, 255), 2)
-        if s["trailer_found"]:
-            tr_is_far = int(s["trailer_id"]) in all_trailer_far_ids
-            tr_col = (255, 200, 0) if tr_is_far else (0, 100, 255)
-            cv2.circle(vis, (int(s["trailer_cx"]), int(s["trailer_cy"])), 16, tr_col, 3)
-            if s["trailer_distance"] > 0:
-                cv2.putText(vis, f'{s["trailer_distance"] * 100:.1f}cm',
-                            (int(s["trailer_cx"]) + 18, int(s["trailer_cy"]) - 12),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, tr_col, 2)
-            fx2, fy2, r = int(s["trailer_cx_f"]), int(s["trailer_cy_f"]), 10
-            cv2.line(vis, (fx2 - r, fy2), (fx2 + r, fy2), (255, 160, 50), 2)
-            cv2.line(vis, (fx2, fy2 - r), (fx2, fy2 + r), (255, 160, 50), 2)
+        self._draw_robot_markers(vis, s)
+        self._draw_info_panel(vis, s)
 
         with self._state_lock:
             self.state["roi_source"] = roi_source
 
         self.frame = self._encode(vis, 75)
+
+    @staticmethod
+    def _is_locked(m, s):
+        if m.get("kind") == "target":
+            lt = s.get("locked_target_id")
+            return lt is not None and int(m.get("id", -1)) == int(lt)
+        ltr = s.get("locked_trailer")
+        return bool(ltr) and m.get("name") == ltr
+
+    def _draw_robot_markers(self, vis, s):
+        markers = s.get("markers", [])
+        # Draw unlocked first so the locked marker ends up on top.
+        for m in sorted(markers, key=lambda m: self._is_locked(m, s)):
+            locked = self._is_locked(m, s)
+            if m.get("kind") == "target":
+                col, tag = COL_TARGET, "T"
+            elif m.get("far"):
+                col, tag = COL_FAR, "FAR"
+            else:
+                col, tag = COL_TRAILER, "TR"
+            cx, cy = int(m.get("cx", 0)), int(m.get("cy", 0))
+            persisted = bool(m.get("persisted"))
+
+            if locked:
+                cv2.circle(vis, (cx, cy), 24, COL_LOCK, 4)
+                cv2.circle(vis, (cx, cy), 16, col, 2)
+                # Filtered position used by the FSM
+                fx, fy, r = int(m.get("cx_f", cx)), int(m.get("cy_f", cy)), 12
+                cv2.line(vis, (fx - r, fy), (fx + r, fy), COL_LOCK, 2)
+                cv2.line(vis, (fx, fy - r), (fx, fy + r), COL_LOCK, 2)
+            else:
+                cv2.circle(vis, (cx, cy), 14, col, 1 if persisted else 2)
+
+            label = f'{"LOCK " if locked else ""}{tag}:{m.get("id", "?")}'
+            dist = float(m.get("dist", -1.0))
+            if dist > 0:
+                label += f" {dist * 100:.1f}cm"
+            if persisted:
+                label += " (held)"
+            cv2.putText(vis, label, (cx + 26, cy - 14), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.6 if locked else 0.5, COL_LOCK if locked else col, 2)
+
+    def _draw_info_panel(self, vis, s):
+        lt = s.get("locked_target_id")
+        ltr = s.get("locked_trailer")
+        phase = "trailer" if s.get("searching_container") else "target"
+        lines = [
+            f'Phase: {phase}',
+            f'Locked target: {lt if lt is not None else "-"}',
+            f'Locked trailer: {ltr if ltr else "-"}',
+            f'Markers: {len(s.get("markers", []))}',
+        ]
+        x0, y0, lh = 10, 10, 30
+        w = 340
+        h = lh * len(lines) + 14
+        roi = vis[y0:y0 + h, x0:x0 + w]
+        if roi.size:
+            overlay = np.zeros_like(roi)
+            vis[y0:y0 + h, x0:x0 + w] = cv2.addWeighted(roi, 0.35, overlay, 0.65, 0)
+        for i, text in enumerate(lines):
+            col = COL_TEXT
+            if i == 1 and lt is not None:
+                col = COL_LOCK
+            if i == 2 and ltr:
+                col = COL_LOCK
+            cv2.putText(vis, text, (x0 + 10, y0 + 28 + i * lh),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, col, 2)
 
     @staticmethod
     def _encode(img, quality):
@@ -439,6 +536,8 @@ class DashboardNode(Node):
             with self._state_lock:
                 s = dict(self.state)
             s["connected"] = (time.time() - s["last_update"]) < 5.0
+            s["markers_age_s"] = (time.time() - self._markers_rx) if self._markers_rx > 0 else -1.0
+            s["phase"] = "trailer" if s.get("searching_container") else "target"
             s["ros_domain_id"] = self.domain_id
             s["port"] = self.port
             s.pop("last_state_msg", None)
@@ -476,11 +575,15 @@ class DashboardNode(Node):
             msg = String(); msg.data = json.dumps(cmd)
             self.control_pub.publish(msg)
             with self._state_lock:
-                for k in ("use_distance_target", "use_distance_trailer",
-                          "grasp_distance_m", "deploy_distance_m",
-                          "approach_dist_gain", "approach_step_min", "approach_step_max"):
+                for k in FSM_SETTABLE_KEYS:
                     if k in cmd:
                         self.state[k] = cmd[k]
+            return jsonify({"ok": True})
+
+        @app.route("/api/release_lock", methods=["POST"])
+        def api_release_lock():
+            msg = String(); msg.data = json.dumps({"release_lock": True})
+            self.control_pub.publish(msg)
             return jsonify({"ok": True})
 
         @app.route("/stream/raw")
